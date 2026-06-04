@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
-import { jsonError, handleRouteError } from "@/lib/api";
+import { corsJson, corsOptions, jsonError, handleRouteError } from "@/lib/api";
 import { isAuthorizedBoothRequest } from "@/lib/auth/booth";
 import { createPresignedPutUrl } from "@/lib/r2/urls";
 import { presignUploadSchema } from "@/lib/validation";
+
+export function OPTIONS() {
+  return corsOptions();
+}
 
 function safeFilename(filename: string) {
   return filename.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
       }),
     );
 
-    return NextResponse.json({ uploads });
+    return corsJson({ uploads });
   } catch (error) {
     return handleRouteError(error);
   }

@@ -5,4 +5,5 @@ export type QueueSnapshot = {
   tickets: TicketRow[];
   nowServing: TicketRow | null;
   nextUp: TicketRow[];
+  missedButAccepted: TicketRow[];
 };

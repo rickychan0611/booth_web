@@ -41,9 +41,8 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
 
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-neutral-950">
-      <div className="mx-auto max-w-5xl">
-        <header>
-          <p className="text-sm font-semibold uppercase tracking-wide text-rose-600">Your photos</p>
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-4xl flex-col items-center justify-center">
+        <header className="mb-6 text-center">
           <h1 className="text-3xl font-bold">{eventName}</h1>
         </header>
 
@@ -58,22 +57,23 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
           </section>
         ) : null}
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="grid w-full max-w-md gap-5">
           {assets.map((asset) => (
             <article key={asset.id} className="overflow-hidden rounded-md bg-white shadow-sm">
               {asset.contentType.startsWith("image/") ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={asset.viewUrl} alt={`${asset.kind} photo`} className="aspect-[4/3] w-full object-cover" />
+                <div className="grid aspect-[4/6] w-full place-items-center bg-white">
+                  <img src={asset.viewUrl} alt="Photo booth layout" className="h-full w-full object-contain" />
+                </div>
               ) : (
-                <div className="grid aspect-[4/3] place-items-center bg-neutral-200">
+                <div className="grid aspect-[4/6] place-items-center bg-neutral-200">
                   <ImageIcon size={36} />
                 </div>
               )}
               <div className="flex items-center justify-between p-3">
-                <span className="text-sm font-semibold capitalize">{asset.kind}</span>
                 <a
                   href={asset.downloadUrl}
-                  className="inline-flex items-center gap-2 rounded-md bg-neutral-950 px-3 py-2 text-sm font-semibold text-white"
+                  className="ml-auto inline-flex items-center gap-2 rounded-md bg-neutral-950 px-3 py-2 text-sm font-semibold text-white"
                 >
                   <Download size={16} />
                   Download

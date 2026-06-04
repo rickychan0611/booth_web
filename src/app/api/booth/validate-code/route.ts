@@ -1,16 +1,15 @@
-import { NextResponse } from "next/server";
-import { jsonError, handleRouteError } from "@/lib/api";
-import { isAuthorizedBoothRequest } from "@/lib/auth/booth";
+import { corsJson, corsOptions, jsonError, handleRouteError } from "@/lib/api";
 import { hashSecret } from "@/lib/codes";
+import { updateTicketStatus } from "@/lib/queue/service";
 import { createServiceClient } from "@/lib/supabase/server";
 import { boothValidateSchema } from "@/lib/validation";
 
+export function OPTIONS() {
+  return corsOptions();
+}
+
 export async function POST(request: Request) {
   try {
-    if (!isAuthorizedBoothRequest(request)) {
-      return jsonError("Unauthorized booth request", 401);
-    }
-
     const body = boothValidateSchema.parse(await request.json());
     const supabase = createServiceClient();
     const { data: event, error: eventError } = await supabase
@@ -31,33 +30,39 @@ export async function POST(request: Request) {
       .from("tickets")
       .select("*")
       .eq("event_id", body.eventId)
-      .eq("queue_number", event.current_queue_number)
       .eq("access_code_hash", hashSecret(body.accessCode))
       .eq("payment_status", "paid")
-      .in("status", ["waiting", "active"]);
+      .in("status", ["waiting", "active", "skipped"])
+      .order("queue_number", { ascending: true });
 
     if (ticketError) {
       throw new Error(ticketError.message);
     }
 
-    const ticket = tickets?.[0];
+    const ticket =
+      tickets?.find((candidate) => candidate.status === "active") ??
+      tickets?.find(
+        (candidate) =>
+          candidate.status === "skipped" &&
+          candidate.queue_number <= event.current_queue_number,
+      ) ??
+      tickets?.find(
+        (candidate) =>
+          candidate.status === "waiting" &&
+          candidate.queue_number <= event.current_queue_number,
+      );
 
     if (!ticket) {
-      return jsonError("Invalid code or queue position", 403);
+      return jsonError("This code is not ready yet, or it has already been used.", 403);
     }
 
-    const { data: updatedTicket, error: updateError } = await supabase
-      .from("tickets")
-      .update({ status: "active" })
-      .eq("id", ticket.id)
-      .select("*")
-      .single();
+    const updatedTicket = await updateTicketStatus({
+      eventId: body.eventId,
+      ticketId: ticket.id,
+      status: "used",
+    });
 
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-
-    return NextResponse.json({
+    return corsJson({
       ticket: updatedTicket,
       galleryUrl: `/gallery/${ticket.gallery_token_lookup}`,
     });

@@ -1,6 +1,6 @@
 # Electron Booth API Contract
 
-The Electron booth should store an event ID and booth shared secret on the kiosk PC.
+The Electron booth should store an event ID and booth shared secret on the kiosk PC. The temporary web booth screen does not ask for the secret; it is intended for local kiosk testing. Keep direct upload routes protected with the booth secret.
 
 Send the booth secret as:
 

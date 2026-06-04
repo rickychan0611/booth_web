@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
 import { generateAccessCode, generateGalleryToken, hashSecret, lastFour } from "@/lib/codes";
-import { handleRouteError } from "@/lib/api";
+import { corsJson, corsOptions, handleRouteError } from "@/lib/api";
 import { createManualTicket } from "@/lib/queue/service";
 import { manualTicketSchema } from "@/lib/validation";
+
+export function OPTIONS() {
+  return corsOptions();
+}
 
 export async function POST(request: Request) {
   try {
@@ -11,6 +14,7 @@ export async function POST(request: Request) {
     const galleryToken = generateGalleryToken();
     const ticket = await createManualTicket({
       eventId: body.eventId,
+      accessCode,
       accessCodeHash: hashSecret(accessCode),
       accessCodeLast4: lastFour(accessCode),
       galleryTokenHash: hashSecret(galleryToken),
@@ -18,7 +22,7 @@ export async function POST(request: Request) {
       paymentMethod: body.paymentMethod,
     });
 
-    return NextResponse.json({
+    return corsJson({
       ticket,
       accessCode,
       galleryUrl: `/gallery/${galleryToken}`,

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { constantTimeEquals, generateAccessCode, generateGalleryToken, hashSecret } from "@/lib/codes";
 
 describe("code helpers", () => {
-  it("generates six-digit access codes", () => {
-    expect(generateAccessCode()).toMatch(/^\d{6}$/);
+  it("generates four-digit access codes", () => {
+    expect(generateAccessCode()).toMatch(/^\d{4}$/);
   });
 
   it("generates high entropy gallery tokens", () => {

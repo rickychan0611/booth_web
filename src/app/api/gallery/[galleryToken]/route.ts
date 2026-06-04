@@ -27,7 +27,8 @@ export async function GET(
         .from("photo_assets")
         .select("*")
         .eq("ticket_id", ticket.id)
-        .order("created_at", { ascending: true }),
+        .eq("kind", "layout")
+        .order("created_at", { ascending: false }),
     ]);
 
     if (eventResult.error) {

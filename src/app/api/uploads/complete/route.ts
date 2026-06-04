@@ -1,8 +1,11 @@
-import { NextResponse } from "next/server";
-import { jsonError, handleRouteError } from "@/lib/api";
+import { corsJson, corsOptions, jsonError, handleRouteError } from "@/lib/api";
 import { isAuthorizedBoothRequest } from "@/lib/auth/booth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { completeUploadSchema } from "@/lib/validation";
+
+export function OPTIONS() {
+  return corsOptions();
+}
 
 export async function POST(request: Request) {
   try {
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
       throw new Error(error.message);
     }
 
-    return NextResponse.json({ assets: data ?? [] });
+    return corsJson({ assets: data ?? [] });
   } catch (error) {
     return handleRouteError(error);
   }

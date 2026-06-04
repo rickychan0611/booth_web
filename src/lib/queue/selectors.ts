@@ -25,10 +25,16 @@ export function buildQueueSnapshot(event: EventRow, tickets: TicketRow[]): Queue
     )
     .slice(0, 3);
 
+  const missedButAccepted = orderedTickets.filter(
+    (ticket) =>
+      ticket.status === "skipped" && ticket.queue_number <= event.current_queue_number,
+  );
+
   return {
     event,
     tickets: orderedTickets,
     nowServing,
     nextUp,
+    missedButAccepted,
   };
 }

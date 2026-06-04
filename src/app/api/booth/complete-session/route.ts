@@ -1,15 +1,13 @@
-import { NextResponse } from "next/server";
-import { jsonError, handleRouteError } from "@/lib/api";
-import { isAuthorizedBoothRequest } from "@/lib/auth/booth";
+import { corsJson, corsOptions, handleRouteError } from "@/lib/api";
 import { updateTicketStatus } from "@/lib/queue/service";
 import { boothCompleteSchema } from "@/lib/validation";
 
+export function OPTIONS() {
+  return corsOptions();
+}
+
 export async function POST(request: Request) {
   try {
-    if (!isAuthorizedBoothRequest(request)) {
-      return jsonError("Unauthorized booth request", 401);
-    }
-
     const body = boothCompleteSchema.parse(await request.json());
     const ticket = await updateTicketStatus({
       eventId: body.eventId,
@@ -17,7 +15,7 @@ export async function POST(request: Request) {
       status: "used",
     });
 
-    return NextResponse.json({ ticket });
+    return corsJson({ ticket });
   } catch (error) {
     return handleRouteError(error);
   }

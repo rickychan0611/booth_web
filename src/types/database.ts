@@ -26,6 +26,7 @@ export type TicketRow = {
   id: string;
   event_id: string;
   queue_number: number;
+  access_code: string | null;
   access_code_hash: string;
   access_code_last4: string;
   gallery_token_hash: string;
@@ -86,6 +87,7 @@ export type Database = {
             TicketRow,
             | "event_id"
             | "queue_number"
+            | "access_code"
             | "access_code_hash"
             | "access_code_last4"
             | "gallery_token_hash"
@@ -130,6 +132,7 @@ export type Database = {
       create_manual_ticket: {
         Args: {
           p_event_id: string;
+          p_access_code: string;
           p_access_code_hash: string;
           p_access_code_last4: string;
           p_gallery_token_hash: string;

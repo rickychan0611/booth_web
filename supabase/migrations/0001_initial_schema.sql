@@ -37,6 +37,7 @@ create table if not exists tickets (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references events(id) on delete cascade,
   queue_number integer not null,
+  access_code text,
   access_code_hash text not null,
   access_code_last4 text not null,
   gallery_token_hash text not null,
@@ -107,6 +108,7 @@ for each row execute function set_updated_at();
 
 create or replace function create_manual_ticket(
   p_event_id uuid,
+  p_access_code text,
   p_access_code_hash text,
   p_access_code_last4 text,
   p_gallery_token_hash text,
@@ -134,6 +136,7 @@ begin
   insert into tickets (
     event_id,
     queue_number,
+    access_code,
     access_code_hash,
     access_code_last4,
     gallery_token_hash,
@@ -145,6 +148,7 @@ begin
   values (
     p_event_id,
     v_event.next_queue_number,
+    p_access_code,
     p_access_code_hash,
     p_access_code_last4,
     p_gallery_token_hash,

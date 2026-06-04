@@ -22,6 +22,7 @@ export async function getQueueSnapshot(eventId: string) {
 
 export async function createManualTicket(input: {
   eventId: string;
+  accessCode: string;
   accessCodeHash: string;
   accessCodeLast4: string;
   galleryTokenHash: string;
@@ -31,6 +32,7 @@ export async function createManualTicket(input: {
   const supabase = createServiceClient();
   const { data, error } = await supabase.rpc("create_manual_ticket", {
     p_event_id: input.eventId,
+    p_access_code: input.accessCode,
     p_access_code_hash: input.accessCodeHash,
     p_access_code_last4: input.accessCodeLast4,
     p_gallery_token_hash: input.galleryTokenHash,
@@ -64,6 +66,17 @@ export async function updateTicketStatus(input: {
   status: TicketStatus;
 }) {
   const supabase = createServiceClient();
+  const { data: existingTicket, error: existingError } = await supabase
+    .from("tickets")
+    .select("status")
+    .eq("id", input.ticketId)
+    .eq("event_id", input.eventId)
+    .single();
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
   const { data, error } = await supabase
     .from("tickets")
     .update({
@@ -79,7 +92,10 @@ export async function updateTicketStatus(input: {
     throw new Error(error.message);
   }
 
-  if (input.status === "skipped" || input.status === "cancelled" || input.status === "used") {
+  if (
+    existingTicket.status !== input.status &&
+    (input.status === "skipped" || input.status === "cancelled" || input.status === "used")
+  ) {
     await advanceQueue(input.eventId);
   }
 

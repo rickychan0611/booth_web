@@ -20,6 +20,7 @@ function ticket(queueNumber: number, status: TicketRow["status"]): TicketRow {
     id: `ticket-${queueNumber}`,
     event_id: event.id,
     queue_number: queueNumber,
+    access_code: "1234",
     access_code_hash: "hash",
     access_code_last4: "1234",
     gallery_token_hash: "hash",
@@ -46,16 +47,38 @@ describe("queue selectors", () => {
     ).toMatchObject({ queue_number: 4 });
   });
 
-  it("builds now serving and next up without skipped or cancelled tickets", () => {
+  it("builds now serving, next up, and missed-but-accepted tickets", () => {
     const snapshot = buildQueueSnapshot(event, [
       ticket(1, "used"),
       ticket(2, "active"),
       ticket(3, "cancelled"),
       ticket(4, "waiting"),
       ticket(5, "waiting"),
+      ticket(6, "skipped"),
     ]);
 
     expect(snapshot.nowServing?.queue_number).toBe(2);
     expect(snapshot.nextUp.map((nextTicket) => nextTicket.queue_number)).toEqual([4, 5]);
+    expect(snapshot.missedButAccepted).toEqual([]);
+  });
+
+  it("keeps earlier skipped tickets visible because their codes still work", () => {
+    const snapshot = buildQueueSnapshot(
+      { ...event, current_queue_number: 5 },
+      [ticket(2, "skipped"), ticket(4, "skipped"), ticket(5, "waiting")],
+    );
+
+    expect(snapshot.missedButAccepted.map((missedTicket) => missedTicket.queue_number)).toEqual([
+      2, 4,
+    ]);
+  });
+
+  it("keeps a skipped current ticket usable when there is no later waiting ticket", () => {
+    const snapshot = buildQueueSnapshot(
+      { ...event, current_queue_number: 5 },
+      [ticket(5, "skipped")],
+    );
+
+    expect(snapshot.missedButAccepted.map((missedTicket) => missedTicket.queue_number)).toEqual([5]);
   });
 });

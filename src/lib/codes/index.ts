@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 
 export function generateAccessCode() {
-  return randomInt(100000, 999999).toString();
+  return randomInt(1000, 9999).toString();
 }
 
 export function generateGalleryToken() {

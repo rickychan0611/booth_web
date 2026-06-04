@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
-import { handleRouteError } from "@/lib/api";
+import { corsJson, corsOptions, handleRouteError } from "@/lib/api";
 import { getQueueSnapshot } from "@/lib/queue/service";
 import { uuidSchema } from "@/lib/validation";
+
+export function OPTIONS() {
+  return corsOptions();
+}
 
 export async function GET(request: Request) {
   try {
@@ -9,7 +12,7 @@ export async function GET(request: Request) {
     const eventId = uuidSchema.parse(url.searchParams.get("eventId"));
     const snapshot = await getQueueSnapshot(eventId);
 
-    return NextResponse.json(snapshot);
+    return corsJson(snapshot);
   } catch (error) {
     return handleRouteError(error);
   }

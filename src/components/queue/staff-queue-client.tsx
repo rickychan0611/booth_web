@@ -1,7 +1,7 @@
 "use client";
 
-import { Eye, ListRestart, Plus, SkipForward, SquareCheckBig, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ListRestart, Plus, SkipForward, SquareCheckBig, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/queue/status-badge";
 import { createBrowserClient } from "@/lib/supabase/browser";
@@ -70,14 +70,6 @@ export function StaffQueueClient({ eventId }: { eventId: string }) {
       supabase.removeChannel(channel);
     };
   }, [eventId, loadSnapshot]);
-
-  const currentTicket = useMemo(() => {
-    if (!snapshot) {
-      return null;
-    }
-
-    return snapshot.nowServing ?? snapshot.tickets.find((ticket) => ticket.status === "active") ?? null;
-  }, [snapshot]);
 
   async function postAction(path: string, body: Record<string, unknown>) {
     setIsBusy(true);
@@ -218,24 +210,6 @@ export function StaffQueueClient({ eventId }: { eventId: string }) {
               </Button>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                disabled={!currentTicket || isBusy}
-                onClick={() => currentTicket && ticketAction("/api/queue/used", currentTicket)}
-              >
-                <SquareCheckBig size={18} />
-                Mark Used
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!snapshot || isBusy}
-                onClick={() => postAction("/api/queue/next", { eventId })}
-              >
-                <SkipForward size={18} />
-                Next Guest
-              </Button>
-            </div>
           </div>
         </section>
 
@@ -245,7 +219,7 @@ export function StaffQueueClient({ eventId }: { eventId: string }) {
           </div>
           <div className="divide-y divide-neutral-100">
             {snapshot?.tickets.length ? (
-              snapshot.tickets.map((ticket) => (
+              [...snapshot.tickets].reverse().map((ticket) => (
                 <div key={ticket.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <div className="grid h-12 w-12 place-items-center rounded-md bg-neutral-100 text-lg font-black">
@@ -254,15 +228,11 @@ export function StaffQueueClient({ eventId }: { eventId: string }) {
                     <div>
                       <StatusBadge status={ticket.status} />
                       <p className="mt-1 text-sm text-neutral-500">
-                        Code ending {ticket.access_code_last4} · {ticket.payment_method.replace("manual_", "")}
+                        Code {ticket.access_code ?? ticket.access_code_last4} - {ticket.payment_method.replace("manual_", "")}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="ghost" onClick={() => alert(`Stored securely. Last four: ${ticket.access_code_last4}`)}>
-                      <Eye size={16} />
-                      Reveal
-                    </Button>
                     <Button variant="secondary" disabled={isBusy} onClick={() => ticketAction("/api/queue/skip", ticket)}>
                       <SkipForward size={16} />
                       Skip
