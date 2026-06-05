@@ -38,7 +38,18 @@ x-booth-secret: <secret>
 
 Success returns the ticket and gallery URL. The booth can start the photo session only after this succeeds.
 
-## Upload Photos
+## Upload Photos and Session Video
+
+Supported asset kinds: `original`, `layout`, `thumbnail`, `video`.
+
+Allowed content types:
+
+- Images: `image/jpeg`, `image/png`, `image/webp`
+- Video: `video/mp4`, `video/webm`
+
+Video assets are stored under `events/<eventId>/tickets/<ticketId>/videos/`. Width and height may be omitted or sent as `0` for video.
+
+### Presigned uploads (recommended for video)
 
 Ask for presigned R2 upload URLs:
 
@@ -53,7 +64,8 @@ x-booth-secret: <secret>
   "assets": [
     { "kind": "original", "filename": "photo-001.jpg", "contentType": "image/jpeg" },
     { "kind": "layout", "filename": "layout.jpg", "contentType": "image/jpeg" },
-    { "kind": "thumbnail", "filename": "thumb.jpg", "contentType": "image/jpeg" }
+    { "kind": "thumbnail", "filename": "thumb.jpg", "contentType": "image/jpeg" },
+    { "kind": "video", "filename": "session.mp4", "contentType": "video/mp4" }
   ]
 }
 ```
@@ -76,10 +88,32 @@ x-booth-secret: <secret>
       "sizeBytes": 123456,
       "width": 1800,
       "height": 1200
+    },
+    {
+      "kind": "video",
+      "r2Key": "events/<eventId>/tickets/<ticketId>/videos/004-video-session.mp4",
+      "contentType": "video/mp4",
+      "sizeBytes": 8450000,
+      "width": 0,
+      "height": 0
     }
   ]
 }
 ```
+
+### Direct multipart upload
+
+For smaller payloads or local testing, upload in one request:
+
+```http
+POST /api/uploads/direct
+content-type: multipart/form-data
+x-booth-secret: <secret>
+
+eventId, ticketId, kind=video, filename=session.mp4, file=<bytes>
+```
+
+Direct uploads through Next.js are capped at 100MB. Prefer presigned PUT for longer session videos, especially on hosted platforms with smaller function payload limits.
 
 ## Complete Session
 

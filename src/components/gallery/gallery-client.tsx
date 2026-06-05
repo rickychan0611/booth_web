@@ -1,7 +1,8 @@
 "use client";
 
-import { Download, ImageIcon } from "lucide-react";
+import { Download, Film, ImageIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { GalleryShare } from "@/components/gallery/gallery-share";
 
 type GalleryAsset = {
   id: string;
@@ -53,16 +54,41 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
           <section className="mt-8 rounded-md bg-white p-8 text-center shadow-sm">
             <ImageIcon className="mx-auto text-neutral-400" size={42} />
             <h2 className="mt-3 text-xl font-bold">Photos are still processing</h2>
-            <p className="mt-2 text-neutral-600">Refresh this page in a moment after the booth finishes uploading.</p>
+            <p className="mt-2 text-neutral-600">
+              Refresh this page in a moment after the booth finishes uploading.
+            </p>
           </section>
+        ) : null}
+
+        {!isLoading && !error && assets.length > 0 ? (
+          <div className="mb-6 w-full max-w-md">
+            <GalleryShare eventName={eventName} />
+          </div>
         ) : null}
 
         <section className="grid w-full max-w-md gap-5">
           {assets.map((asset) => (
             <article key={asset.id} className="overflow-hidden rounded-md bg-white shadow-sm">
-              {asset.contentType.startsWith("image/") ? (
-                // eslint-disable-next-line @next/next/no-img-element
+              {asset.kind === "video" || asset.contentType.startsWith("video/") ? (
+                <div className="bg-neutral-950">
+                  <video
+                    className="aspect-video w-full"
+                    controls
+                    playsInline
+                    preload="metadata"
+                    src={asset.viewUrl}
+                  >
+                    <track kind="captions" />
+                  </video>
+                  <p className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white">
+                    <Film size={16} />
+                    Session video
+                  </p>
+                </div>
+              ) : asset.contentType.startsWith("image/") ? (
                 <div className="grid aspect-[4/6] w-full place-items-center bg-white">
+                  {/* Presigned R2 URLs are not compatible with next/image optimization. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={asset.viewUrl} alt="Photo booth layout" className="h-full w-full object-contain" />
                 </div>
               ) : (
@@ -73,10 +99,11 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
               <div className="flex items-center justify-between p-3">
                 <a
                   href={asset.downloadUrl}
+                  download
                   className="ml-auto inline-flex items-center gap-2 rounded-md bg-neutral-950 px-3 py-2 text-sm font-semibold text-white"
                 >
                   <Download size={16} />
-                  Download
+                  {asset.kind === "video" ? "Download video" : "Download"}
                 </a>
               </div>
             </article>

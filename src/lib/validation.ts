@@ -1,6 +1,29 @@
 import { z } from "zod";
+import { isAllowedUploadContentType, normalizeContentType } from "@/lib/uploads/assets";
+import type { PhotoKind } from "@/types/database";
 
 export const uuidSchema = z.string().uuid();
+
+const optionalDimensionSchema = z
+  .number()
+  .int()
+  .min(0)
+  .optional()
+  .transform((value) => (value && value > 0 ? value : undefined));
+
+function uploadAssetRefinement(
+  asset: { kind: PhotoKind; contentType: string },
+  context: z.RefinementCtx,
+) {
+  const normalized = normalizeContentType(asset.contentType);
+  if (!isAllowedUploadContentType(asset.kind, normalized)) {
+    context.addIssue({
+      code: "custom",
+      message: `contentType is not allowed for kind "${asset.kind}"`,
+      path: ["contentType"],
+    });
+  }
+}
 
 export const paymentMethodSchema = z.enum([
   "manual_cash",
@@ -49,28 +72,36 @@ export const boothCompleteSchema = z.object({
 export const presignUploadSchema = z.object({
   eventId: uuidSchema,
   ticketId: uuidSchema,
-  assets: z.array(
-    z.object({
-      kind: photoKindSchema,
-      filename: z.string().min(1),
-      contentType: z.string().min(3),
-    }),
-  ),
+  assets: z
+    .array(
+      z
+        .object({
+          kind: photoKindSchema,
+          filename: z.string().min(1),
+          contentType: z.string().min(3),
+        })
+        .superRefine(uploadAssetRefinement),
+    )
+    .min(1),
 });
 
 export const completeUploadSchema = z.object({
   eventId: uuidSchema,
   ticketId: uuidSchema,
-  assets: z.array(
-    z.object({
-      kind: photoKindSchema,
-      r2Key: z.string().min(1),
-      contentType: z.string().min(3),
-      sizeBytes: z.number().int().nonnegative().optional(),
-      width: z.number().int().positive().optional(),
-      height: z.number().int().positive().optional(),
-    }),
-  ),
+  assets: z
+    .array(
+      z
+        .object({
+          kind: photoKindSchema,
+          r2Key: z.string().min(1),
+          contentType: z.string().min(3),
+          sizeBytes: z.number().int().nonnegative().optional(),
+          width: optionalDimensionSchema,
+          height: optionalDimensionSchema,
+        })
+        .superRefine(uploadAssetRefinement),
+    )
+    .min(1),
 });
 
 export const landingContentSchema = z.object({

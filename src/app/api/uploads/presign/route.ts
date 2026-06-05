@@ -1,14 +1,11 @@
 import { corsJson, corsOptions, jsonError, handleRouteError } from "@/lib/api";
 import { isAuthorizedBoothRequest } from "@/lib/auth/booth";
 import { createPresignedPutUrl } from "@/lib/r2/urls";
+import { buildR2AssetKey, normalizeContentType } from "@/lib/uploads/assets";
 import { presignUploadSchema } from "@/lib/validation";
 
 export function OPTIONS() {
   return corsOptions();
-}
-
-function safeFilename(filename: string) {
-  return filename.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
 }
 
 export async function POST(request: Request) {
@@ -20,13 +17,20 @@ export async function POST(request: Request) {
     const body = presignUploadSchema.parse(await request.json());
     const uploads = await Promise.all(
       body.assets.map(async (asset, index) => {
-        const key = `events/${body.eventId}/tickets/${body.ticketId}/${String(index + 1).padStart(3, "0")}-${asset.kind}-${safeFilename(asset.filename)}`;
+        const key = buildR2AssetKey({
+          eventId: body.eventId,
+          ticketId: body.ticketId,
+          kind: asset.kind,
+          filename: asset.filename,
+          index,
+        });
+        const contentType = normalizeContentType(asset.contentType);
         return {
           kind: asset.kind,
           r2Key: key,
           uploadUrl: await createPresignedPutUrl({
             key,
-            contentType: asset.contentType,
+            contentType,
           }),
         };
       }),

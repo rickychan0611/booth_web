@@ -3,6 +3,14 @@ import { hashSecret } from "@/lib/codes";
 import { handleRouteError, jsonError } from "@/lib/api";
 import { createPresignedGetUrl } from "@/lib/r2/urls";
 import { createServiceClient } from "@/lib/supabase/server";
+import type { PhotoKind } from "@/types/database";
+
+const GALLERY_KIND_ORDER: Record<PhotoKind, number> = {
+  layout: 0,
+  video: 1,
+  original: 2,
+  thumbnail: 3,
+};
 
 export async function GET(
   _request: Request,
@@ -27,7 +35,7 @@ export async function GET(
         .from("photo_assets")
         .select("*")
         .eq("ticket_id", ticket.id)
-        .eq("kind", "layout")
+        .in("kind", ["layout", "video"])
         .order("created_at", { ascending: false }),
     ]);
 
@@ -39,8 +47,14 @@ export async function GET(
       throw new Error(assetResult.error.message);
     }
 
+    const sortedAssets = [...(assetResult.data ?? [])].sort((left, right) => {
+      const leftOrder = GALLERY_KIND_ORDER[left.kind as PhotoKind] ?? 99;
+      const rightOrder = GALLERY_KIND_ORDER[right.kind as PhotoKind] ?? 99;
+      return leftOrder - rightOrder;
+    });
+
     const assets = await Promise.all(
-      (assetResult.data ?? []).map(async (asset) => ({
+      sortedAssets.map(async (asset) => ({
         id: asset.id,
         kind: asset.kind,
         contentType: asset.content_type,

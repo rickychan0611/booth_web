@@ -1,6 +1,7 @@
 import { corsJson, corsOptions, jsonError, handleRouteError } from "@/lib/api";
 import { isAuthorizedBoothRequest } from "@/lib/auth/booth";
 import { createServiceClient } from "@/lib/supabase/server";
+import { normalizeContentType } from "@/lib/uploads/assets";
 import { completeUploadSchema } from "@/lib/validation";
 
 export function OPTIONS() {
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
       ticket_id: body.ticketId,
       kind: asset.kind,
       r2_key: asset.r2Key,
-      content_type: asset.contentType,
+      content_type: normalizeContentType(asset.contentType),
       size_bytes: asset.sizeBytes ?? null,
       width: asset.width ?? null,
       height: asset.height ?? null,
