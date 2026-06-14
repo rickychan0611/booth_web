@@ -104,6 +104,14 @@ export const completeUploadSchema = z.object({
     .min(1),
 });
 
+export const bookingInquirySchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.string().trim().email(),
+  eventDate: z.string().optional(),
+  city: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
+});
+
 export const landingContentSchema = z.object({
   businessName: z.string().min(1),
   headline: z.string().min(1),

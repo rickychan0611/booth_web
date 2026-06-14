@@ -53,6 +53,16 @@ export type PhotoAssetRow = {
   created_at: string;
 };
 
+export type BookingInquiryRow = {
+  id: string;
+  name: string;
+  email: string;
+  event_date: string | null;
+  city: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
 export type LandingContent = {
   businessName: string;
   headline: string;
@@ -100,6 +110,12 @@ export type Database = {
         Row: PhotoAssetRow;
         Insert: Omit<PhotoAssetRow, "id" | "created_at"> & { id?: string; created_at?: string };
         Update: Partial<PhotoAssetRow>;
+      };
+      booking_inquiries: {
+        Row: BookingInquiryRow;
+        Insert: Pick<BookingInquiryRow, "name" | "email"> &
+          Partial<Pick<BookingInquiryRow, "event_date" | "city" | "notes">>;
+        Update: Partial<BookingInquiryRow>;
       };
       landing_pages: {
         Row: {
