@@ -188,8 +188,8 @@ const pricingAddOns = [
 
 const navLinks = [
   { href: "#features", label: "Features" },
-  { href: "#gallery", label: "Gallery" },
   { href: "#packages", label: "Packages" },
+  { href: "#gallery", label: "Gallery" },
   { href: "#faq", label: "FAQ" },
   { href: "#book", label: "Book Now" },
 ] as const;
@@ -350,7 +350,7 @@ export function ViboLandingPage() {
             A gold framed 43 inch touch screen photo booth with unlimited prints, custom templates, fun props,
             online gallery, and a beautiful event-ready setup your guests will love.
           </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:items-center">
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:items-start sm:justify-start">
             <a
               href="#book"
               onClick={(event) => handleSectionLink(event, "#book")}
@@ -428,30 +428,6 @@ export function ViboLandingPage() {
                   <p className="mt-2 text-sm leading-6 text-white/68">{item.text}</p>
                 </div>
               </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="gallery" className="scroll-mt-20 px-4 py-24 sm:px-6">
-        <div className="mx-auto max-w-7xl">
-          <h2 className="text-center text-4xl font-black sm:text-5xl">Capture the Magic</h2>
-          <div className="mt-12 columns-1 gap-6 space-y-6 sm:columns-2 lg:columns-3">
-            {galleryItems.map((item, index) => (
-              <figure
-                key={item.src}
-                className="mb-6 break-inside-avoid overflow-hidden rounded-lg border border-amber-300/10"
-              >
-                <div className={galleryAspectClass(index)}>
-                  <Image
-                    src={item.src}
-                    alt={item.caption}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover"
-                  />
-                </div>
-              </figure>
             ))}
           </div>
         </div>
@@ -569,6 +545,30 @@ export function ViboLandingPage() {
               Additional hours are available at $100 per hour. Travel fees may apply outside our standard service areas.
             </span>
           </p>
+        </div>
+      </section>
+
+      <section id="gallery" className="scroll-mt-20 px-4 py-24 sm:px-6">
+        <div className="mx-auto max-w-7xl">
+          <h2 className="text-center text-4xl font-black sm:text-5xl">Capture the Magic</h2>
+          <div className="mt-12 columns-1 gap-6 space-y-6 sm:columns-2 lg:columns-3">
+            {galleryItems.map((item, index) => (
+              <figure
+                key={item.src}
+                className="mb-6 break-inside-avoid overflow-hidden rounded-lg border border-amber-300/10"
+              >
+                <div className={galleryAspectClass(index)}>
+                  <Image
+                    src={item.src}
+                    alt={item.caption}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover"
+                  />
+                </div>
+              </figure>
+            ))}
+          </div>
         </div>
       </section>
 

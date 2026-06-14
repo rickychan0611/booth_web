@@ -1,8 +1,8 @@
 "use client";
 
-import { Download, Film, ImageIcon } from "lucide-react";
+import { Download, Film, ImageIcon, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { GalleryShare } from "@/components/gallery/gallery-share";
+import { AssetShareMenu } from "@/components/gallery/gallery-share";
 
 type GalleryAsset = {
   id: string;
@@ -17,6 +17,19 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
   const [assets, setAssets] = useState<GalleryAsset[]>([]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [shareAssetId, setShareAssetId] = useState<string | null>(null);
+
+  const shareAsset = assets.find((asset) => asset.id === shareAssetId) ?? null;
+
+  useEffect(() => {
+    if (!shareAssetId) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [shareAssetId]);
 
   useEffect(() => {
     async function loadGallery() {
@@ -60,12 +73,6 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
           </section>
         ) : null}
 
-        {!isLoading && !error && assets.length > 0 ? (
-          <div className="mb-6 w-full max-w-md">
-            <GalleryShare eventName={eventName} />
-          </div>
-        ) : null}
-
         <section className="grid w-full max-w-md gap-5">
           {assets.map((asset) => (
             <article key={asset.id} className="overflow-hidden rounded-md bg-white shadow-sm">
@@ -96,11 +103,19 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
                   <ImageIcon size={36} />
                 </div>
               )}
-              <div className="flex items-center justify-between p-3">
+              <div className="flex items-center justify-end gap-2 p-3">
+                <button
+                  type="button"
+                  onClick={() => setShareAssetId(asset.id)}
+                  className="inline-flex items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-950 hover:bg-neutral-50"
+                >
+                  <Share2 size={16} />
+                  Share
+                </button>
                 <a
                   href={asset.downloadUrl}
                   download
-                  className="ml-auto inline-flex items-center gap-2 rounded-md bg-neutral-950 px-3 py-2 text-sm font-semibold text-white"
+                  className="inline-flex items-center gap-2 rounded-md bg-neutral-950 px-3 py-2 text-sm font-semibold text-white"
                 >
                   <Download size={16} />
                   {asset.kind === "video" ? "Download video" : "Download"}
@@ -110,6 +125,15 @@ export function GalleryClient({ galleryToken }: { galleryToken: string }) {
           ))}
         </section>
       </div>
+
+      {shareAsset ? (
+        <AssetShareMenu
+          asset={shareAsset}
+          eventName={eventName}
+          open={Boolean(shareAsset)}
+          onClose={() => setShareAssetId(null)}
+        />
+      ) : null}
     </main>
   );
 }

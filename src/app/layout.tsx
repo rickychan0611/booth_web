@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Photo Booth Web System",
+  title: "Vibo Photo Booth",
   description: "Queue control, booth integration, and secure galleries for professional photo booths.",
 };
 
