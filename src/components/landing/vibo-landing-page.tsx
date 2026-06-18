@@ -190,7 +190,6 @@ const navLinks = [
   { href: "#features", label: "Features" },
   { href: "#packages", label: "Packages" },
   { href: "#gallery", label: "Gallery" },
-  { href: "/find-your-image", label: "Find Your Image" },
   { href: "#faq", label: "FAQ" },
   { href: "#book", label: "Book Now" },
 ] as const;
@@ -310,10 +309,16 @@ export function ViboLandingPage() {
               </a>
             ))}
           </div>
+          <Link
+            href="/find-your-image"
+            className="ml-auto shrink-0 text-sm font-semibold text-white/85 hover:text-amber-300"
+          >
+            Find my photo
+          </Link>
           <a
             href="#book"
             onClick={(event) => handleSectionLink(event, "#book")}
-            className="ml-auto shrink-0 rounded-md bg-gradient-to-br from-amber-300 to-amber-600 px-4 py-2 text-sm font-bold text-black shadow-[0_0_20px_rgba(212,175,55,0.18)] transition-transform hover:scale-95"
+            className="shrink-0 rounded-md bg-gradient-to-br from-amber-300 to-amber-600 px-4 py-2 text-sm font-bold text-black shadow-[0_0_20px_rgba(212,175,55,0.18)] transition-transform hover:scale-95"
           >
             Check Availability
           </a>
@@ -321,6 +326,13 @@ export function ViboLandingPage() {
         {mobileMenuOpen ? (
           <div className="border-t border-white/10 bg-black/95 px-4 py-4 md:hidden">
             <div className="flex flex-col gap-3 text-sm font-semibold text-white/90">
+              <Link
+                href="/find-your-image"
+                className="rounded-md px-2 py-2 hover:bg-white/5"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Find my photo
+              </Link>
               {navLinks.map((link) => (
                 <a
                   key={link.href}
