@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { buildQueueSnapshot } from "@/lib/queue/selectors";
+import { normalizePhoneNumber } from "@/lib/phone";
 import type { PaymentMethod, TicketStatus } from "@/types/database";
 
 export async function getQueueSnapshot(eventId: string) {
@@ -64,6 +65,7 @@ export async function updateTicketStatus(input: {
   eventId: string;
   ticketId: string;
   status: TicketStatus;
+  phoneNumber?: string;
 }) {
   const supabase = createServiceClient();
   const { data: existingTicket, error: existingError } = await supabase
@@ -77,12 +79,22 @@ export async function updateTicketStatus(input: {
     throw new Error(existingError.message);
   }
 
+  const phoneNumber = input.phoneNumber ? normalizePhoneNumber(input.phoneNumber) : "";
+  const updatePayload: {
+    status: TicketStatus;
+    used_at: string | null;
+    phone_number?: string;
+  } = {
+    status: input.status,
+    used_at: input.status === "used" ? new Date().toISOString() : null,
+  };
+  if (phoneNumber) {
+    updatePayload.phone_number = phoneNumber;
+  }
+
   const { data, error } = await supabase
     .from("tickets")
-    .update({
-      status: input.status,
-      used_at: input.status === "used" ? new Date().toISOString() : null,
-    })
+    .update(updatePayload)
     .eq("id", input.ticketId)
     .eq("event_id", input.eventId)
     .select("*")

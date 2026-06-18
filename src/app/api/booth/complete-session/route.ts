@@ -13,6 +13,7 @@ export async function POST(request: Request) {
       eventId: body.eventId,
       ticketId: body.ticketId,
       status: "used",
+      phoneNumber: body.phoneNumber,
     });
 
     return corsJson({ ticket });

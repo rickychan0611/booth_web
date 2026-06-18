@@ -124,8 +124,19 @@ x-booth-secret: <secret>
 
 {
   "eventId": "<uuid>",
-  "ticketId": "<uuid>"
+  "ticketId": "<uuid>",
+  "phoneNumber": "6041234567"
 }
 ```
 
-This marks the ticket used and advances the event queue to the next waiting ticket.
+This marks the ticket used, stores the normalized guest phone number when provided, and advances the event queue to the next waiting ticket.
+
+## Find Gallery By Phone
+
+Look up uploaded galleries for one event and phone number:
+
+```http
+GET /api/gallery/by-phone?eventId=<uuid>&phone=6041234567
+```
+
+The phone number is normalized to digits before lookup. The response includes matching sessions, gallery URLs, and serialized layout/video assets.

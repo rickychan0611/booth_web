@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Mail, MessageCircle, Share2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Share2 } from "lucide-react";
+import { Drawer } from "vaul";
+import { getPlatform, useShareSheet, type ShareOption } from "react-sharesheet/headless";
 
 type GalleryAsset = {
   id: string;
@@ -12,13 +13,7 @@ type GalleryAsset = {
   downloadUrl: string;
 };
 
-type ShareTarget = {
-  id: string;
-  label: string;
-  icon: typeof Share2;
-  action: "file" | "copy" | "href";
-  href?: string;
-};
+const SHARE_OPTIONS: ShareOption[] = ["copy", "download", "whatsapp", "instagram", "facebook", "x", "sms", "email"];
 
 function assetFilename(asset: GalleryAsset) {
   if (asset.kind === "video") return "vibo-session.mp4";
@@ -26,71 +21,101 @@ function assetFilename(asset: GalleryAsset) {
   return "vibo-photo.jpg";
 }
 
-function galleryPageUrl() {
-  return typeof window === "undefined" ? "" : window.location.href;
-}
+function CompactShareButtons({
+  asset,
+  sharePageUrl,
+  shareText,
+}: {
+  asset: GalleryAsset;
+  sharePageUrl: string;
+  shareText: string;
+}) {
+  const shareSheet = useShareSheet({
+    shareUrl: sharePageUrl,
+    shareText,
+    downloadUrl: asset.downloadUrl,
+    downloadFilename: assetFilename(asset),
+    emailSubject: shareText,
+  });
 
-function buildShareTargets(shareUrl: string, shareText: string, supportsFileShare: boolean): ShareTarget[] {
-  const encodedUrl = encodeURIComponent(shareUrl);
-  const encodedText = encodeURIComponent(shareText);
-  const targets: ShareTarget[] = [];
+  const actions: Record<ShareOption, () => void> = {
+    native: () => void shareSheet.nativeShare(),
+    copy: () => void shareSheet.copyLink(),
+    download: () => void shareSheet.downloadFile(),
+    whatsapp: shareSheet.shareWhatsApp,
+    telegram: shareSheet.shareTelegram,
+    instagram: shareSheet.shareInstagram,
+    facebook: shareSheet.shareFacebook,
+    snapchat: shareSheet.shareSnapchat,
+    sms: shareSheet.shareSMS,
+    email: shareSheet.shareEmail,
+    linkedin: shareSheet.shareLinkedIn,
+    reddit: shareSheet.shareReddit,
+    x: shareSheet.shareX,
+    tiktok: shareSheet.shareTikTok,
+    threads: shareSheet.shareThreads,
+  };
 
-  if (supportsFileShare) {
-    targets.push({
-      id: "file",
-      label: "Share photo or video",
-      icon: Share2,
-      action: "file",
-    });
-  }
+  const labels: Partial<Record<ShareOption, string>> = {
+    copy: shareSheet.copied ? "Copied!" : "Copy link",
+    download: shareSheet.downloading ? "Saving..." : asset.kind === "video" ? "Save video" : "Save photo",
+    whatsapp: "WhatsApp",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    x: "X",
+    sms: "Text",
+    email: "Email",
+  };
 
-  targets.push(
-    {
-      id: "whatsapp",
-      label: "WhatsApp",
-      icon: MessageCircle,
-      action: "href",
-      href: `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
-    },
-    {
-      id: "copy",
-      label: "Copy gallery link",
-      icon: Copy,
-      action: "copy",
-    },
-    {
-      id: "sms",
-      label: "Text message",
-      icon: MessageCircle,
-      action: "href",
-      href: `sms:?&body=${encodedText}%20${encodedUrl}`,
-    },
-    {
-      id: "email",
-      label: "Email",
-      icon: Mail,
-      action: "href",
-      href: `mailto:?subject=${encodedText}&body=${encodedText}%0A%0A${encodedUrl}`,
-    },
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-2">
+      {SHARE_OPTIONS.map((id) => {
+        const platform = getPlatform(id);
+        const availability = shareSheet.platformAvailability[id];
+        if (!availability.available) return null;
+        if (id === "download" && !asset.downloadUrl) return null;
+
+        const Icon = platform.Icon;
+
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={actions[id]}
+            className="flex w-[4.25rem] flex-col items-center gap-1"
+          >
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: platform.colors.bg, color: platform.colors.text }}
+            >
+              <Icon size={18} />
+            </span>
+            <span className="text-center text-[10px] leading-tight font-medium text-neutral-800">
+              {labels[id] ?? platform.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
-
-  return targets;
 }
 
 export function AssetShareMenu({
   asset,
   eventName,
+  sharePageUrl,
   open,
   onClose,
 }: {
   asset: GalleryAsset;
   eventName: string;
+  sharePageUrl: string;
   open: boolean;
   onClose: () => void;
 }) {
   const [status, setStatus] = useState("");
-  const [isSharing, setIsSharing] = useState(false);
-  const [supportsFileShare, setSupportsFileShare] = useState(false);
+  const [isSharingFile, setIsSharingFile] = useState(false);
+  const [canShareFiles, setCanShareFiles] = useState(false);
 
   const shareText =
     asset.kind === "video"
@@ -100,34 +125,15 @@ export function AssetShareMenu({
   useEffect(() => {
     if (!open) {
       setStatus("");
-      setIsSharing(false);
+      setIsSharingFile(false);
       return;
     }
 
-    setSupportsFileShare(typeof navigator.share === "function");
+    setCanShareFiles(typeof navigator.share === "function");
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [open, onClose]);
-
-  const copyGalleryLink = useCallback(async () => {
-    const shareUrl = galleryPageUrl();
-    if (!shareUrl) return;
-    await navigator.clipboard.writeText(shareUrl);
-    setStatus("Gallery link copied");
-    window.setTimeout(() => setStatus(""), 2000);
-  }, []);
-
-  async function shareAssetFile() {
-    setIsSharing(true);
+  const shareAssetFile = useCallback(async () => {
+    setIsSharingFile(true);
     setStatus("");
 
     try {
@@ -155,7 +161,7 @@ export function AssetShareMenu({
         await navigator.share({
           title: eventName,
           text: shareText,
-          url: galleryPageUrl(),
+          url: sharePageUrl,
         });
         onClose();
         return;
@@ -168,78 +174,40 @@ export function AssetShareMenu({
       }
       setStatus(shareError instanceof Error ? shareError.message : "Unable to share this file");
     } finally {
-      setIsSharing(false);
+      setIsSharingFile(false);
     }
-  }
-
-  async function handleShare(target: ShareTarget) {
-    if (target.action === "file") {
-      await shareAssetFile();
-      return;
-    }
-
-    if (target.action === "copy") {
-      await copyGalleryLink();
-      return;
-    }
-
-    if (target.href) {
-      window.location.href = target.href;
-      onClose();
-    }
-  }
-
-  if (!open) return null;
-
-  const targets = buildShareTargets(galleryPageUrl(), shareText, supportsFileShare);
+  }, [asset, eventName, onClose, sharePageUrl, shareText]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <button
-        type="button"
-        aria-label="Close share menu"
-        className="absolute inset-0 bg-black/45"
-        onClick={onClose}
-      />
-      <section className="relative z-10 w-full max-w-md rounded-t-2xl bg-white p-4 pb-6 shadow-xl sm:rounded-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold">Share</h2>
-            <p className="text-sm text-neutral-600">
-              {asset.kind === "video" ? "Send this video" : "Send this photo"}
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close"
-            className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100"
-            onClick={onClose}
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <Drawer.Root open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <Drawer.Portal>
+        <Drawer.Overlay className="fixed inset-0 z-50 bg-black/50" />
+        <Drawer.Content className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-neutral-200 bg-white outline-none">
+          <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-neutral-300" />
 
-        <div className="grid grid-cols-2 gap-2">
-          {targets.map((target) => {
-            const Icon = target.icon;
-            return (
-              <Button
-                key={target.id}
+          <div className="px-3 pb-4 pt-1">
+            {canShareFiles ? (
+              <button
                 type="button"
-                variant="secondary"
-                className="h-auto min-h-11 flex-col gap-1 py-3 text-xs"
-                disabled={isSharing}
-                onClick={() => handleShare(target)}
+                disabled={isSharingFile}
+                onClick={() => void shareAssetFile()}
+                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-neutral-950 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
               >
-                <Icon size={18} />
-                {target.id === "file" && isSharing ? "Preparing..." : target.label}
-              </Button>
-            );
-          })}
-        </div>
+                <Share2 size={16} />
+                {isSharingFile
+                  ? "Preparing..."
+                  : asset.kind === "video"
+                    ? "Share video to apps"
+                    : "Share photo to apps"}
+              </button>
+            ) : null}
 
-        {status ? <p className="mt-3 text-sm font-medium text-emerald-700">{status}</p> : null}
-      </section>
-    </div>
+            <CompactShareButtons asset={asset} sharePageUrl={sharePageUrl} shareText={shareText} />
+
+            {status ? <p className="mt-2 text-center text-sm font-medium text-rose-700">{status}</p> : null}
+          </div>
+        </Drawer.Content>
+      </Drawer.Portal>
+    </Drawer.Root>
   );
 }

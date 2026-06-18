@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { ImageUp } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { readEventBranding } from "@/lib/events/branding";
 import type { EventRow } from "@/types/database";
 
 export function AdminEventsClient() {
@@ -11,6 +13,14 @@ export function AdminEventsClient() {
   const [eventDate, setEventDate] = useState("");
   const [error, setError] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [uploadingBannerEventId, setUploadingBannerEventId] = useState<string | null>(null);
+  const [removingBannerEventId, setRemovingBannerEventId] = useState<string | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [savingEventNameId, setSavingEventNameId] = useState<string | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const bannerEventIdRef = useRef<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const loadEvents = useCallback(async () => {
     const response = await fetch("/api/events");
@@ -30,6 +40,117 @@ export function AdminEventsClient() {
 
     return () => window.clearTimeout(timeout);
   }, [loadEvents]);
+
+  function openBannerUpload(eventId: string) {
+    bannerEventIdRef.current = eventId;
+    bannerInputRef.current?.click();
+  }
+
+  async function uploadBanner(file: File) {
+    const eventId = bannerEventIdRef.current;
+    if (!eventId) return;
+
+    setUploadingBannerEventId(eventId);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`/api/events/${eventId}/gallery-banner`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to upload banner");
+      }
+
+      await loadEvents();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Unable to upload banner");
+    } finally {
+      setUploadingBannerEventId(null);
+      bannerEventIdRef.current = null;
+      if (bannerInputRef.current) {
+        bannerInputRef.current.value = "";
+      }
+    }
+  }
+
+  function startEditingEventName(eventId: string, currentName: string) {
+    setEditingEventId(eventId);
+    setEditingName(currentName);
+    window.setTimeout(() => nameInputRef.current?.focus(), 0);
+  }
+
+  function cancelEditingEventName() {
+    setEditingEventId(null);
+    setEditingName("");
+  }
+
+  async function saveEventName(eventId: string, previousName: string) {
+    const trimmedName = editingName.trim();
+
+    if (!trimmedName) {
+      setError("Event name cannot be empty");
+      setEditingName(previousName);
+      setEditingEventId(null);
+      return;
+    }
+
+    if (trimmedName === previousName) {
+      cancelEditingEventName();
+      return;
+    }
+
+    setSavingEventNameId(eventId);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedName }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to update event name");
+      }
+
+      cancelEditingEventName();
+      await loadEvents();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Unable to update event name");
+      setEditingName(previousName);
+    } finally {
+      setSavingEventNameId(null);
+    }
+  }
+
+  async function removeBanner(eventId: string) {
+    setRemovingBannerEventId(eventId);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/events/${eventId}/gallery-banner`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to remove banner");
+      }
+
+      await loadEvents();
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "Unable to remove banner");
+    } finally {
+      setRemovingBannerEventId(null);
+    }
+  }
 
   async function createEvent() {
     setIsBusy(true);
@@ -98,29 +219,103 @@ export function AdminEventsClient() {
           </div>
         </section>
 
+        <input
+          ref={bannerInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              void uploadBanner(file);
+            }
+          }}
+        />
+
         <section className="mt-6 rounded-md bg-white shadow-sm">
           <div className="border-b border-neutral-200 p-4">
             <h2 className="text-lg font-bold">Existing events</h2>
           </div>
           <div className="divide-y divide-neutral-100">
-            {events.map((event) => (
-              <article key={event.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="font-bold">{event.name}</h3>
-                  <p className="text-sm text-neutral-500">
-                    {event.status} · now serving #{event.current_queue_number} · next #{event.next_queue_number}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Link className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold" href={`/staff/events/${event.id}`}>
-                    Staff
-                  </Link>
-                  <Link className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold" href={`/booth/events/${event.id}`}>
-                    Booth
-                  </Link>
-                </div>
-              </article>
-            ))}
+            {events.map((event) => {
+              const hasBanner = Boolean(readEventBranding(event.branding).galleryBannerR2Key);
+              const isUploadingBanner = uploadingBannerEventId === event.id;
+              const isRemovingBanner = removingBannerEventId === event.id;
+              const isEditingName = editingEventId === event.id;
+              const isSavingName = savingEventNameId === event.id;
+
+              return (
+                <article key={event.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    {isEditingName ? (
+                      <input
+                        ref={nameInputRef}
+                        value={editingName}
+                        disabled={isSavingName}
+                        onChange={(changeEvent) => setEditingName(changeEvent.target.value)}
+                        onBlur={() => void saveEventName(event.id, event.name)}
+                        onKeyDown={(keyEvent) => {
+                          if (keyEvent.key === "Enter") {
+                            keyEvent.currentTarget.blur();
+                          }
+                          if (keyEvent.key === "Escape") {
+                            cancelEditingEventName();
+                          }
+                        }}
+                        className="w-full max-w-md rounded-md border border-neutral-300 px-2 py-1 text-base font-bold disabled:opacity-50"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEditingEventName(event.id, event.name)}
+                        className="text-left text-base font-bold hover:underline"
+                      >
+                        {event.name}
+                      </button>
+                    )}
+                    <p className="text-sm text-neutral-500">
+                      {event.status} · now serving #{event.current_queue_number} · next #{event.next_queue_number}
+                      {hasBanner ? (
+                        <>
+                          {" · banner set "}
+                          <button
+                            type="button"
+                            onClick={() => void removeBanner(event.id)}
+                            disabled={isRemovingBanner}
+                            className="text-rose-700 underline underline-offset-2 disabled:opacity-50"
+                          >
+                            {isRemovingBanner ? "(removing...)" : "(remove)"}
+                          </button>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openBannerUpload(event.id)}
+                      disabled={isUploadingBanner || isRemovingBanner}
+                      className="inline-flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      <ImageUp size={16} />
+                      {isUploadingBanner ? "Uploading..." : hasBanner ? "Change banner" : "Upload banner"}
+                    </button>
+                    <Link
+                      className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold"
+                      href={`/gallery/event/${event.id}`}
+                    >
+                      Gallery
+                    </Link>
+                    <Link className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold" href={`/staff/events/${event.id}`}>
+                      Staff
+                    </Link>
+                    <Link className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold" href={`/booth/events/${event.id}`}>
+                      Booth
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
             {events.length === 0 ? <p className="p-4 text-sm text-neutral-500">No events yet.</p> : null}
           </div>
         </section>

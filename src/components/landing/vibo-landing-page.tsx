@@ -190,6 +190,7 @@ const navLinks = [
   { href: "#features", label: "Features" },
   { href: "#packages", label: "Packages" },
   { href: "#gallery", label: "Gallery" },
+  { href: "/find-your-image", label: "Find Your Image" },
   { href: "#faq", label: "FAQ" },
   { href: "#book", label: "Book Now" },
 ] as const;

@@ -43,6 +43,10 @@ export const createEventSchema = z.object({
   eventDate: z.string().datetime().optional(),
 });
 
+export const updateEventSchema = z.object({
+  name: z.string().trim().min(1),
+});
+
 export const manualTicketSchema = z.object({
   eventId: uuidSchema,
   paymentMethod: paymentMethodSchema.exclude(["stripe"]),
@@ -67,6 +71,16 @@ export const boothValidateSchema = z.object({
 export const boothCompleteSchema = z.object({
   eventId: uuidSchema,
   ticketId: uuidSchema,
+  phoneNumber: z.string().optional(),
+});
+
+export const galleryByPhoneSchema = z.object({
+  eventId: uuidSchema.optional(),
+  phone: z.string().min(7).max(32),
+});
+
+export const galleryNameSchema = z.object({
+  name: z.string().trim().min(1).max(80),
 });
 
 export const presignUploadSchema = z.object({

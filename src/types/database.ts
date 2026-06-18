@@ -29,12 +29,14 @@ export type TicketRow = {
   access_code: string | null;
   access_code_hash: string;
   access_code_last4: string;
+  name: string | null;
   gallery_token_hash: string;
   gallery_token_lookup: string;
   status: TicketStatus;
   payment_status: PaymentStatus;
   payment_method: PaymentMethod;
   stripe_checkout_session_id: string | null;
+  phone_number: string | null;
   used_at: string | null;
   created_at: string;
   updated_at: string;
