@@ -311,14 +311,14 @@ export function ViboLandingPage() {
           </div>
           <Link
             href="/find-your-image"
-            className="ml-auto shrink-0 text-sm font-semibold text-white/85 hover:text-amber-300"
+            className="ml-auto hidden shrink-0 text-sm font-semibold text-white/85 hover:text-amber-300 md:inline"
           >
             Find my photo
           </Link>
           <a
             href="#book"
             onClick={(event) => handleSectionLink(event, "#book")}
-            className="shrink-0 rounded-md bg-gradient-to-br from-amber-300 to-amber-600 px-4 py-2 text-sm font-bold text-black shadow-[0_0_20px_rgba(212,175,55,0.18)] transition-transform hover:scale-95"
+            className="ml-auto shrink-0 rounded-md bg-gradient-to-br from-amber-300 to-amber-600 px-4 py-2 text-sm font-bold text-black shadow-[0_0_20px_rgba(212,175,55,0.18)] transition-transform hover:scale-95 md:ml-0"
           >
             Check Availability
           </a>
