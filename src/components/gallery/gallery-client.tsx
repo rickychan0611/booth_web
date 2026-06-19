@@ -14,6 +14,14 @@ type GalleryAsset = {
   downloadUrl: string;
 };
 
+function isVideoAsset(asset: GalleryAsset) {
+  return asset.kind === "video" || asset.contentType.startsWith("video/");
+}
+
+function namePromptSkipKey(galleryToken: string) {
+  return `gallery-name-skipped:${galleryToken}`;
+}
+
 export function GalleryClient({
   galleryToken,
   sharePageUrl,
@@ -24,6 +32,7 @@ export function GalleryClient({
   const [eventName, setEventName] = useState("Photo gallery");
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [assets, setAssets] = useState<GalleryAsset[]>([]);
+  const [queueNumber, setQueueNumber] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [shareAssetId, setShareAssetId] = useState<string | null>(null);
@@ -35,6 +44,22 @@ export function GalleryClient({
 
   const shareAsset = assets.find((asset) => asset.id === shareAssetId) ?? null;
   const enlargedAsset = assets.find((asset) => asset.id === enlargedAssetId) ?? null;
+  const isNamePromptBlocking = nameModalOpen && !isLoading && !error;
+
+  useEffect(() => {
+    if (!isNamePromptBlocking) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isNamePromptBlocking]);
 
   useEffect(() => {
     async function loadGallery() {
@@ -49,9 +74,13 @@ export function GalleryClient({
         setEventName(data.event.name);
         setBannerUrl(data.event.bannerUrl ?? null);
         setAssets(data.assets);
+        setQueueNumber(data.ticket?.queueNumber ?? null);
         const savedName = data.ticket?.name?.trim() ?? "";
         setNameInput(savedName);
-        setNameModalOpen(!savedName);
+        const skippedNamePrompt =
+          typeof window !== "undefined" &&
+          sessionStorage.getItem(namePromptSkipKey(galleryToken)) === "1";
+        setNameModalOpen(!savedName && !skippedNamePrompt);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Gallery not found");
       } finally {
@@ -90,8 +119,19 @@ export function GalleryClient({
     }
   }
 
+  function skipGuestName() {
+    setNameError("");
+    try {
+      sessionStorage.setItem(namePromptSkipKey(galleryToken), "1");
+    } catch {
+      // Ignore storage errors (private browsing, etc.)
+    }
+    setNameModalOpen(false);
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-neutral-100 text-neutral-950">
+      <div className="flex min-h-screen flex-col" inert={isNamePromptBlocking ? true : undefined}>
       <GalleryHeader />
 
       {bannerUrl ? (
@@ -129,7 +169,10 @@ export function GalleryClient({
           <section className="grid w-full max-w-md gap-5">
             {assets.map((asset) => (
               <article key={asset.id} className="overflow-hidden rounded-md bg-white shadow-sm">
-                {asset.kind === "video" || asset.contentType.startsWith("video/") ? (
+                {!isVideoAsset(asset) && queueNumber !== null ? (
+                  <p className="px-3 pt-2 text-xs font-medium text-neutral-500">Photo #{queueNumber}</p>
+                ) : null}
+                {isVideoAsset(asset) ? (
                   <div className="bg-neutral-950">
                     <video
                       className="aspect-video w-full"
@@ -223,10 +266,23 @@ export function GalleryClient({
         </div>
       ) : null}
 
-      {nameModalOpen && !isLoading && !error ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
-          <form onSubmit={saveGuestName} className="w-full max-w-sm rounded-md bg-white p-6 shadow-xl">
-            <h2 className="text-2xl font-bold">What's your name?</h2>
+      </div>
+
+      {isNamePromptBlocking ? (
+        <div
+          className="fixed inset-0 z-[100] grid place-items-center bg-black/70 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gallery-name-prompt-title"
+        >
+          <form
+            onSubmit={saveGuestName}
+            className="relative w-full max-w-sm rounded-md bg-white p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="gallery-name-prompt-title" className="text-2xl font-bold">
+              What's your name?
+            </h2>
             <p className="mt-2 text-sm leading-6 text-neutral-600">
               Add your name so this gallery is easier to identify later.
             </p>
@@ -236,14 +292,22 @@ export function GalleryClient({
                 value={nameInput}
                 onChange={(event) => setNameInput(event.target.value)}
                 autoFocus
+                required
                 maxLength={80}
                 className="h-12 rounded-md border border-neutral-300 px-4 text-base outline-none focus:border-neutral-950"
               />
             </label>
             {nameError ? <p className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-rose-800">{nameError}</p> : null}
-            <Button type="submit" className="mt-5 w-full" disabled={isSavingName}>
+            <Button type="submit" className="mt-5 w-full" disabled={isSavingName || !nameInput.trim()}>
               {isSavingName ? "Saving..." : "Save Name"}
             </Button>
+            <button
+              type="button"
+              onClick={skipGuestName}
+              className="mt-3 w-full py-2 text-sm font-medium text-neutral-500 hover:text-neutral-800"
+            >
+              Skip for now
+            </button>
           </form>
         </div>
       ) : null}

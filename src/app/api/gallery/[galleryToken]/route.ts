@@ -55,6 +55,7 @@ export async function GET(
       },
       ticket: {
         name: ticket.name,
+        queueNumber: ticket.queue_number,
       },
       assets,
     });

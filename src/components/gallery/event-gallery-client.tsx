@@ -1,11 +1,13 @@
 "use client";
 
-import { Download, Film, ImageIcon } from "lucide-react";
+import { Download, Film, ImageIcon, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-type GalleryAsset = {
+const PAGE_SIZE = 20;
+
+type GalleryPreview = {
   id: string;
   kind: string;
   contentType: string;
@@ -20,17 +22,18 @@ type GallerySession = {
   galleryUrl: string;
   usedAt: string | null;
   createdAt: string;
-  assets: GalleryAsset[];
+  assetCount: number;
+  preview: GalleryPreview | null;
 };
 
-function sessionThumbnail(session: GallerySession) {
-  return (
-    session.assets.find((asset) => asset.kind === "thumbnail" && asset.contentType.startsWith("image/")) ??
-    session.assets.find((asset) => asset.kind === "layout" && asset.contentType.startsWith("image/")) ??
-    session.assets.find((asset) => asset.contentType.startsWith("image/")) ??
-    null
-  );
-}
+type Pagination = {
+  page: number;
+  pageSize: number;
+  totalSessions: number;
+  totalPages: number;
+  totalAssets: number;
+  search?: string;
+};
 
 function formatDate(value: string | null) {
   if (!value) return "";
@@ -54,63 +57,125 @@ function eventFileName(eventName: string) {
   return `${eventName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "event"}-gallery.csv`;
 }
 
+function isVideoPreview(preview: GalleryPreview | null) {
+  return Boolean(preview && (preview.kind === "video" || preview.contentType.startsWith("video/")));
+}
+
 export function EventGalleryClient({ eventId }: { eventId: string }) {
   const [eventName, setEventName] = useState("Event gallery");
   const [sessions, setSessions] = useState<GallerySession[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
-  useEffect(() => {
-    async function loadEventGallery() {
-      try {
-        const response = await fetch(`/api/gallery/event/${eventId}`);
-        const data = await response.json();
+  const loadEventGallery = useCallback(async (requestedPage: number, searchQuery: string) => {
+    setIsLoading(true);
+    setError("");
 
-        if (!response.ok) {
-          throw new Error(data.error ?? "Event gallery not found");
-        }
-
-        setEventName(data.event.name);
-        setSessions(data.sessions);
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Event gallery not found");
-      } finally {
-        setIsLoading(false);
+    try {
+      const params = new URLSearchParams({
+        page: String(requestedPage),
+        limit: String(PAGE_SIZE),
+      });
+      if (searchQuery) {
+        params.set("search", searchQuery);
       }
-    }
 
-    loadEventGallery();
+      const response = await fetch(`/api/gallery/event/${eventId}?${params.toString()}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Event gallery not found");
+      }
+
+      setEventName(data.event.name);
+      setSessions(data.sessions);
+      setPagination(data.pagination);
+      setPage(data.pagination.page);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Event gallery not found");
+    } finally {
+      setIsLoading(false);
+    }
   }, [eventId]);
 
-  const totalAssets = sessions.reduce((count, session) => count + session.assets.length, 0);
-  const csvData = useMemo(() => {
-    const rows = [
-      ["Event", "Photo Number", "Name", "Phone Number", "Gallery URL", "File Count", "Used At", "Created At"],
-      ...sessions.map((session) => [
-        eventName,
-        session.queueNumber,
-        session.name ?? "",
-        session.phoneNumber ?? "",
-        session.galleryUrl,
-        session.assets.length,
-        session.usedAt ?? "",
-        session.createdAt,
-      ]),
-    ];
-    return rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-  }, [eventName, sessions]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
 
-  function exportCsv() {
-    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = eventFileName(eventName);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+    setSearch("");
+    setDebouncedSearch("");
+  }, [eventId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    void loadEventGallery(page, debouncedSearch);
+  }, [eventId, page, debouncedSearch, loadEventGallery]);
+
+  const totalAssets = pagination?.totalAssets ?? 0;
+  const totalSessions = pagination?.totalSessions ?? 0;
+  const isSearching = debouncedSearch.length > 0;
+
+  async function exportCsv() {
+    setIsExporting(true);
+
+    try {
+      const response = await fetch(`/api/gallery/event/${eventId}?metadataOnly=1`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not export gallery list");
+      }
+
+      const rows = [
+        ["Event", "Photo Number", "Name", "Phone Number", "Gallery URL", "File Count", "Used At", "Created At"],
+        ...(data.sessions as GallerySession[]).map((session) => [
+          data.event.name,
+          session.queueNumber,
+          session.name ?? "",
+          session.phoneNumber ?? "",
+          session.galleryUrl,
+          session.assetCount,
+          session.usedAt ?? "",
+          session.createdAt,
+        ]),
+      ];
+      const csvData = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+      const blob = new Blob([csvData], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = eventFileName(data.event.name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Could not export gallery list");
+    } finally {
+      setIsExporting(false);
+    }
   }
+
+  const pageLabel = useMemo(() => {
+    if (!pagination || pagination.totalSessions === 0) return "";
+    const start = (pagination.page - 1) * pagination.pageSize + 1;
+    const end = Math.min(pagination.page * pagination.pageSize, pagination.totalSessions);
+    return `Showing ${start}-${end} of ${pagination.totalSessions}`;
+  }, [pagination]);
 
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-neutral-950">
@@ -121,16 +186,34 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
             <h1 className="mt-1 text-3xl font-bold">{eventName}</h1>
             {!isLoading && !error ? (
               <p className="mt-2 text-neutral-600">
-                {sessions.length} session{sessions.length === 1 ? "" : "s"} - {totalAssets} file
+                {totalSessions} session{totalSessions === 1 ? "" : "s"} · {totalAssets} file
                 {totalAssets === 1 ? "" : "s"}
               </p>
             ) : null}
           </div>
-          <Button type="button" variant="secondary" onClick={exportCsv} disabled={isLoading || sessions.length === 0}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void exportCsv()}
+            disabled={isLoading || isExporting || totalSessions === 0}
+          >
             <Download size={16} />
-            Export CSV
+            {isExporting ? "Exporting..." : "Export CSV"}
           </Button>
         </header>
+
+        <label className="mb-6 block">
+          <span className="sr-only">Search by photo number or phone number</span>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by photo # or phone number"
+              className="h-11 w-full rounded-md border border-neutral-300 bg-white pl-10 pr-4 text-sm outline-none focus:border-neutral-950"
+            />
+          </div>
+        </label>
 
         {isLoading ? <p className="text-center text-neutral-600">Loading event gallery...</p> : null}
         {error ? <p className="rounded-md bg-rose-50 p-4 text-rose-800">{error}</p> : null}
@@ -138,28 +221,29 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
         {!isLoading && !error && sessions.length === 0 ? (
           <section className="rounded-md bg-white p-8 text-center shadow-sm">
             <ImageIcon className="mx-auto text-neutral-400" size={42} />
-            <h2 className="mt-3 text-xl font-bold">No photos yet</h2>
+            <h2 className="mt-3 text-xl font-bold">{isSearching ? "No matching galleries" : "No photos yet"}</h2>
             <p className="mt-2 text-neutral-600">
-              Guest galleries will appear here after the booth uploads photos for this event.
+              {isSearching
+                ? "Try a different photo number or phone number."
+                : "Guest galleries will appear here after the booth uploads photos for this event."}
             </p>
           </section>
         ) : null}
 
         <section className="grid gap-3">
           {sessions.map((session) => {
-            const thumbnail = sessionThumbnail(session);
-            const videoAsset = session.assets.find((asset) => asset.contentType.startsWith("video/"));
+            const preview = session.preview;
             const sessionDate = formatDate(session.usedAt ?? session.createdAt);
 
             return (
               <article key={session.ticketId} className="grid grid-cols-[96px_1fr] gap-4 rounded-md bg-white p-3 shadow-sm sm:grid-cols-[128px_1fr]">
                 <Link href={session.galleryUrl} className="relative grid aspect-square place-items-center overflow-hidden rounded-md bg-neutral-100">
-                  {thumbnail ? (
+                  {preview && !isVideoPreview(preview) ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={thumbnail.viewUrl} alt={`Photo ${session.queueNumber}`} className="h-full w-full object-cover" />
-                  ) : videoAsset ? (
+                    <img src={preview.viewUrl} alt={`Photo ${session.queueNumber}`} className="h-full w-full object-cover" />
+                  ) : preview && isVideoPreview(preview) ? (
                     <>
-                      <video className="h-full w-full object-cover" muted playsInline preload="metadata" src={videoAsset.viewUrl}>
+                      <video className="h-full w-full object-cover" muted playsInline preload="metadata" src={preview.viewUrl}>
                         <track kind="captions" />
                       </video>
                       <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white">
@@ -177,10 +261,10 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
                     <p className="truncate text-lg font-bold">{session.name || "No name yet"}</p>
                     <p className="truncate text-sm text-neutral-600">{session.phoneNumber || "No phone number"}</p>
                     <p className="text-sm text-neutral-500">
-                      Photo #{session.queueNumber}{sessionDate ? ` - ${sessionDate}` : ""}
+                      Photo #{session.queueNumber}{sessionDate ? ` · ${sessionDate}` : ""}
                     </p>
                     <p className="text-xs text-neutral-400">
-                      {session.assets.length} file{session.assets.length === 1 ? "" : "s"}
+                      {session.assetCount} file{session.assetCount === 1 ? "" : "s"}
                     </p>
                   </div>
                   <Link
@@ -194,8 +278,34 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
             );
           })}
         </section>
+
+        {!isLoading && !error && pagination && pagination.totalPages > 1 ? (
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
+            <p className="text-sm text-neutral-600">{pageLabel}</p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pagination.page <= 1 || isLoading}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </Button>
+              <span className="px-2 text-sm font-medium text-neutral-700">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pagination.page >= pagination.totalPages || isLoading}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );
 }
-

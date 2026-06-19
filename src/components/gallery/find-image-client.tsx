@@ -1,7 +1,8 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { GalleryFooter, GalleryHeader } from "@/components/gallery/gallery-chrome";
 import { Button } from "@/components/ui/button";
 
@@ -51,11 +52,64 @@ function formatDate(value: string | null) {
 }
 
 export function FindImageClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [sessions, setSessions] = useState<GallerySession[]>([]);
   const resultsRef = useRef<HTMLElement | null>(null);
+  const lastFetchedPhoneRef = useRef<string | null>(null);
+
+  const searchByPhone = useCallback(async (normalizedPhone: string, scrollToResults = false) => {
+    if (normalizedPhone.length < 7) {
+      setMessage("Please enter a valid phone number.");
+      setSessions([]);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      setMessage("");
+      const response = await fetch(`/api/gallery/by-phone?phone=${encodeURIComponent(normalizedPhone)}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not search for your image.");
+      }
+
+      const nextSessions = Array.isArray(data.sessions) ? data.sessions : [];
+      lastFetchedPhoneRef.current = normalizedPhone;
+      setSessions(nextSessions);
+
+      if (nextSessions.length === 0) {
+        setMessage("We could not find a gallery for that phone number yet.");
+        return;
+      }
+
+      if (scrollToResults) {
+        window.setTimeout(() => {
+          resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not search for your image.");
+      setSessions([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const phoneParam = searchParams.get("phone");
+    if (!phoneParam) return;
+
+    const normalizedPhone = normalizePhone(phoneParam);
+    if (normalizedPhone.length < 7) return;
+    if (lastFetchedPhoneRef.current === normalizedPhone) return;
+
+    setPhone(phoneParam);
+    void searchByPhone(normalizedPhone);
+  }, [searchParams, searchByPhone]);
 
   async function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,29 +119,11 @@ export function FindImageClient() {
       return;
     }
 
-    try {
-      setIsSearching(true);
-      setMessage("");
-      setSessions([]);
-      const response = await fetch(`/api/gallery/by-phone?phone=${encodeURIComponent(normalizedPhone)}`);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error ?? "Could not search for your image.");
-      }
+    const nextUrl = `/find-your-image?phone=${encodeURIComponent(normalizedPhone)}`;
+    await searchByPhone(normalizedPhone, true);
 
-      const nextSessions = Array.isArray(data.sessions) ? data.sessions : [];
-      if (nextSessions.length === 0) {
-        setMessage("We could not find a gallery for that phone number yet.");
-        return;
-      }
-      setSessions(nextSessions);
-      window.setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not search for your image.");
-    } finally {
-      setIsSearching(false);
+    if (searchParams.get("phone") !== normalizedPhone) {
+      router.replace(nextUrl, { scroll: false });
     }
   }
 

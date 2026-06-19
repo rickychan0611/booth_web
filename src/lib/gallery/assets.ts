@@ -25,6 +25,32 @@ export function sortGalleryAssets<T extends { kind: string }>(assets: T[]) {
   });
 }
 
+export function pickListPreviewAsset(assets: GalleryAssetRow[]) {
+  const sortedAssets = sortGalleryAssets(assets);
+
+  return (
+    sortedAssets.find((asset) => asset.kind === "thumbnail" && asset.content_type.startsWith("image/")) ??
+    sortedAssets.find((asset) => asset.kind === "layout" && asset.content_type.startsWith("image/")) ??
+    sortedAssets.find((asset) => asset.content_type.startsWith("image/")) ??
+    sortedAssets.find((asset) => asset.kind === "video" || asset.content_type.startsWith("video/")) ??
+    null
+  );
+}
+
+export async function serializeGalleryAsset(asset: GalleryAssetRow) {
+  const viewUrl = await createPresignedGetUrl(asset.r2_key);
+
+  return {
+    id: asset.id,
+    kind: asset.kind,
+    contentType: asset.content_type,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+    viewUrl,
+    downloadUrl: viewUrl,
+  };
+}
+
 export async function serializeGalleryAssets(assets: GalleryAssetRow[]) {
   const sortedAssets = sortGalleryAssets(assets);
 
