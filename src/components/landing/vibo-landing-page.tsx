@@ -27,6 +27,7 @@ import {
   Users,
   Video,
   Wand2,
+  X,
 } from "lucide-react";
 import { useState, type FormEvent, type MouseEvent } from "react";
 
@@ -236,6 +237,7 @@ function PhotoFrame({
 export function ViboLandingPage() {
   const [submitted, setSubmitted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [summerPromoVisible, setSummerPromoVisible] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [bookingForm, setBookingForm] = useState({
@@ -245,6 +247,10 @@ export function ViboLandingPage() {
     city: "",
     notes: "",
   });
+
+  function dismissSummerPromo() {
+    setSummerPromoVisible(false);
+  }
 
   async function handleBookingSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -713,6 +719,38 @@ export function ViboLandingPage() {
         </div>
         <p className="mx-auto mt-8 max-w-7xl text-xs text-white/45">&copy; 2026 Vibo Photo Booth. All rights reserved.</p>
       </footer>
+
+      {summerPromoVisible ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 md:inset-x-auto md:right-6 md:bottom-6 md:w-[min(28rem,calc(100vw-3rem))]">
+          <div className="summer-promo-gradient-border rounded-t-md md:rounded-md">
+            <div className="relative overflow-hidden rounded-t-[calc(0.375rem-2px)] md:rounded-[calc(0.375rem-2px)]">
+              <button
+                type="button"
+                onClick={dismissSummerPromo}
+                className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full border border-amber-400/60 bg-black/75 text-white backdrop-blur hover:bg-black/90"
+                aria-label="Close promotion"
+              >
+                <X size={16} />
+              </button>
+              <a
+                href="#book"
+                onClick={(event) => handleSectionLink(event, "#book")}
+                className="block cursor-pointer"
+                aria-label="Book now — summer promotion"
+              >
+                <Image
+                  src="/images/summer-promo.jpg"
+                  alt="Limited-time summer promotion: photo booth rental $150 per hour, save 25%"
+                  width={1120}
+                  height={280}
+                  sizes="(max-width: 768px) 100vw, 28rem"
+                  className="h-auto w-full object-cover"
+                />
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
