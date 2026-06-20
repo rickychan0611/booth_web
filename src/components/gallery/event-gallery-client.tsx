@@ -12,6 +12,7 @@ type GalleryPreview = {
   kind: string;
   contentType: string;
   viewUrl: string;
+  downloadUrl: string;
 };
 
 type GallerySession = {
@@ -59,6 +60,12 @@ function eventFileName(eventName: string) {
 
 function isVideoPreview(preview: GalleryPreview | null) {
   return Boolean(preview && (preview.kind === "video" || preview.contentType.startsWith("video/")));
+}
+
+function sessionImageFilename(queueNumber: number, contentType: string) {
+  if (contentType.includes("png")) return `photo-${queueNumber}.png`;
+  if (contentType.includes("webp")) return `photo-${queueNumber}.webp`;
+  return `photo-${queueNumber}.jpg`;
 }
 
 export function EventGalleryClient({ eventId }: { eventId: string }) {
@@ -267,12 +274,24 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
                       {session.assetCount} file{session.assetCount === 1 ? "" : "s"}
                     </p>
                   </div>
-                  <Link
-                    href={session.galleryUrl}
-                    className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white"
-                  >
-                    Open Gallery
-                  </Link>
+                  <div className="flex flex-wrap gap-2">
+                    {preview && !isVideoPreview(preview) ? (
+                      <a
+                        href={preview.downloadUrl}
+                        download={sessionImageFilename(session.queueNumber, preview.contentType)}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-950 hover:bg-neutral-50"
+                      >
+                        <Download size={16} />
+                        Download
+                      </a>
+                    ) : null}
+                    <Link
+                      href={session.galleryUrl}
+                      className="inline-flex h-10 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white"
+                    >
+                      Open Gallery
+                    </Link>
+                  </div>
                 </div>
               </article>
             );
