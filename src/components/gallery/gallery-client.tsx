@@ -135,8 +135,8 @@ export function GalleryClient({
       <GalleryHeader />
 
       {bannerUrl ? (
-        <div className="bg-neutral-100 px-4 pt-4">
-          <div className="mx-auto h-[200px] w-full max-w-[600px] overflow-hidden rounded-md bg-white shadow-sm">
+        <div className="bg-neutral-100 sm:px-4 sm:pt-4">
+          <div className="h-[200px] w-full overflow-hidden sm:mx-auto sm:max-w-[600px] sm:rounded-md sm:bg-white sm:shadow-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={bannerUrl}
