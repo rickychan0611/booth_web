@@ -1,11 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Share2 } from "lucide-react";
 import { Drawer } from "vaul";
 import { getPlatform, useShareSheet, type ShareOption } from "react-sharesheet/headless";
 
-type GalleryAsset = {
+export type GalleryAsset = {
   id: string;
   kind: string;
   contentType: string;
@@ -19,6 +17,61 @@ function assetFilename(asset: GalleryAsset) {
   if (asset.kind === "video") return "vibo-session.mp4";
   if (asset.contentType.includes("png")) return "vibo-photo.png";
   return "vibo-photo.jpg";
+}
+
+function shareTextForAsset(asset: GalleryAsset, eventName: string) {
+  return asset.kind === "video" ? `My video from ${eventName}` : `My photo from ${eventName}`;
+}
+
+export type NativeShareOutcome = "shared" | "cancelled" | "unsupported";
+
+export async function tryNativeShareAsset({
+  asset,
+  eventName,
+  sharePageUrl,
+}: {
+  asset: GalleryAsset;
+  eventName: string;
+  sharePageUrl: string;
+}): Promise<NativeShareOutcome> {
+  if (typeof navigator.share !== "function") {
+    return "unsupported";
+  }
+
+  const shareText = shareTextForAsset(asset, eventName);
+
+  try {
+    const response = await fetch(asset.viewUrl);
+    if (!response.ok) {
+      return "unsupported";
+    }
+
+    const blob = await response.blob();
+    const file = new File([blob], assetFilename(asset), {
+      type: asset.contentType || blob.type,
+    });
+
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        title: eventName,
+        text: shareText,
+        files: [file],
+      });
+      return "shared";
+    }
+
+    await navigator.share({
+      title: eventName,
+      text: shareText,
+      url: sharePageUrl,
+    });
+    return "shared";
+  } catch (shareError) {
+    if (shareError instanceof Error && shareError.name === "AbortError") {
+      return "cancelled";
+    }
+    return "unsupported";
+  }
 }
 
 function CompactShareButtons({
@@ -113,70 +166,7 @@ export function AssetShareMenu({
   open: boolean;
   onClose: () => void;
 }) {
-  const [status, setStatus] = useState("");
-  const [isSharingFile, setIsSharingFile] = useState(false);
-  const [canShareFiles, setCanShareFiles] = useState(false);
-
-  const shareText =
-    asset.kind === "video"
-      ? `My video from ${eventName}`
-      : `My photo from ${eventName}`;
-
-  useEffect(() => {
-    if (!open) {
-      setStatus("");
-      setIsSharingFile(false);
-      return;
-    }
-
-    setCanShareFiles(typeof navigator.share === "function");
-  }, [open]);
-
-  const shareAssetFile = useCallback(async () => {
-    setIsSharingFile(true);
-    setStatus("");
-
-    try {
-      const response = await fetch(asset.viewUrl);
-      if (!response.ok) {
-        throw new Error("Unable to load this file for sharing");
-      }
-
-      const blob = await response.blob();
-      const file = new File([blob], assetFilename(asset), {
-        type: asset.contentType || blob.type,
-      });
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          title: eventName,
-          text: shareText,
-          files: [file],
-        });
-        onClose();
-        return;
-      }
-
-      if (typeof navigator.share === "function") {
-        await navigator.share({
-          title: eventName,
-          text: shareText,
-          url: sharePageUrl,
-        });
-        onClose();
-        return;
-      }
-
-      throw new Error("Sharing is not supported on this device");
-    } catch (shareError) {
-      if (shareError instanceof Error && shareError.name === "AbortError") {
-        return;
-      }
-      setStatus(shareError instanceof Error ? shareError.message : "Unable to share this file");
-    } finally {
-      setIsSharingFile(false);
-    }
-  }, [asset, eventName, onClose, sharePageUrl, shareText]);
+  const shareText = shareTextForAsset(asset, eventName);
 
   return (
     <Drawer.Root open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -186,25 +176,7 @@ export function AssetShareMenu({
           <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-neutral-300" />
 
           <div className="px-3 pb-4 pt-1">
-            {canShareFiles ? (
-              <button
-                type="button"
-                disabled={isSharingFile}
-                onClick={() => void shareAssetFile()}
-                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-neutral-950 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                <Share2 size={16} />
-                {isSharingFile
-                  ? "Preparing..."
-                  : asset.kind === "video"
-                    ? "Share video to apps"
-                    : "Share photo to apps"}
-              </button>
-            ) : null}
-
             <CompactShareButtons asset={asset} sharePageUrl={sharePageUrl} shareText={shareText} />
-
-            {status ? <p className="mt-2 text-center text-sm font-medium text-rose-700">{status}</p> : null}
           </div>
         </Drawer.Content>
       </Drawer.Portal>
