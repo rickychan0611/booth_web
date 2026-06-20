@@ -3,7 +3,7 @@
 import { Download, Film, ImageIcon, Share2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { GalleryFooter, GalleryHeader } from "@/components/gallery/gallery-chrome";
-import { AssetShareMenu, tryNativeShareAsset, type GalleryAsset } from "@/components/gallery/gallery-share";
+import { loadShareFile, tryNativeShareAsset, type GalleryAsset } from "@/components/gallery/gallery-share";
 import { Button } from "@/components/ui/button";
 
 function isVideoAsset(asset: GalleryAsset) {
@@ -27,15 +27,15 @@ export function GalleryClient({
   const [queueNumber, setQueueNumber] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [shareAssetId, setShareAssetId] = useState<string | null>(null);
   const [sharingAssetId, setSharingAssetId] = useState<string | null>(null);
+  const [shareFilesById, setShareFilesById] = useState<Record<string, File>>({});
+  const [shareError, setShareError] = useState("");
   const [enlargedAssetId, setEnlargedAssetId] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [nameModalOpen, setNameModalOpen] = useState(false);
   const [nameError, setNameError] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
 
-  const shareAsset = assets.find((asset) => asset.id === shareAssetId) ?? null;
   const enlargedAsset = assets.find((asset) => asset.id === enlargedAssetId) ?? null;
   const isNamePromptBlocking = nameModalOpen && !isLoading && !error;
 
@@ -84,6 +84,42 @@ export function GalleryClient({
     loadGallery();
   }, [galleryToken]);
 
+  useEffect(() => {
+    if (!assets.length) {
+      setShareFilesById({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function preloadShareFiles() {
+      const entries = await Promise.all(
+        assets.map(async (asset) => {
+          const file = await loadShareFile(galleryToken, asset);
+          return file ? ([asset.id, file] as const) : null;
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const next: Record<string, File> = {};
+      for (const entry of entries) {
+        if (entry) {
+          next[entry[0]] = entry[1];
+        }
+      }
+      setShareFilesById(next);
+    }
+
+    void preloadShareFiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assets, galleryToken]);
+
   async function saveGuestName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextName = nameInput.trim();
@@ -124,20 +160,20 @@ export function GalleryClient({
 
   async function handleShareClick(asset: GalleryAsset) {
     setSharingAssetId(asset.id);
+    setShareError("");
 
     const outcome = await tryNativeShareAsset({
       asset,
       eventName,
       sharePageUrl,
+      shareFile: shareFilesById[asset.id] ?? null,
     });
 
     setSharingAssetId(null);
 
-    if (outcome === "shared" || outcome === "cancelled") {
-      return;
+    if (outcome === "unsupported") {
+      setShareError("Sharing is not supported here. Open this gallery in Safari or Chrome on your phone.");
     }
-
-    setShareAssetId(asset.id);
   }
 
   return (
@@ -178,6 +214,9 @@ export function GalleryClient({
           ) : null}
 
           <section className="grid w-full max-w-md gap-5">
+            {shareError ? (
+              <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-800">{shareError}</p>
+            ) : null}
             {assets.map((asset) => (
               <article key={asset.id} className="overflow-hidden rounded-md bg-white shadow-sm">
                 {!isVideoAsset(asset) && queueNumber !== null ? (
@@ -241,16 +280,6 @@ export function GalleryClient({
       </main>
 
       <GalleryFooter />
-
-      {shareAsset ? (
-        <AssetShareMenu
-          asset={shareAsset}
-          eventName={eventName}
-          sharePageUrl={sharePageUrl}
-          open={Boolean(shareAsset)}
-          onClose={() => setShareAssetId(null)}
-        />
-      ) : null}
 
       {enlargedAsset?.contentType.startsWith("image/") ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/92 p-4">
