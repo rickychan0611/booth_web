@@ -25,6 +25,7 @@ type GallerySession = {
   createdAt: string;
   assetCount: number;
   preview: GalleryPreview | null;
+  download: GalleryPreview | null;
 };
 
 type Pagination = {
@@ -68,6 +69,23 @@ function sessionImageFilename(queueNumber: number, contentType: string) {
   return `photo-${queueNumber}.jpg`;
 }
 
+async function downloadSessionImage(url: string, filename: string) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("Could not download this image");
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 export function EventGalleryClient({ eventId }: { eventId: string }) {
   const [eventName, setEventName] = useState("Event gallery");
   const [sessions, setSessions] = useState<GallerySession[]>([]);
@@ -78,6 +96,7 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [downloadingTicketId, setDownloadingTicketId] = useState<string | null>(null);
 
   const loadEventGallery = useCallback(async (requestedPage: number, searchQuery: string) => {
     setIsLoading(true);
@@ -174,6 +193,24 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
       setError(exportError instanceof Error ? exportError.message : "Could not export gallery list");
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  async function handleDownloadSession(session: GallerySession) {
+    const download = session.download;
+    if (!download) return;
+
+    try {
+      setDownloadingTicketId(session.ticketId);
+      setError("");
+      await downloadSessionImage(
+        download.downloadUrl,
+        sessionImageFilename(session.queueNumber, download.contentType),
+      );
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Could not download this image");
+    } finally {
+      setDownloadingTicketId(null);
     }
   }
 
@@ -275,15 +312,16 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {preview && !isVideoPreview(preview) ? (
-                      <a
-                        href={preview.downloadUrl}
-                        download={sessionImageFilename(session.queueNumber, preview.contentType)}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-950 hover:bg-neutral-50"
+                    {session.download ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleDownloadSession(session)}
+                        disabled={downloadingTicketId === session.ticketId}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-950 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Download size={16} />
-                        Download
-                      </a>
+                        {downloadingTicketId === session.ticketId ? "Downloading..." : "Download"}
+                      </button>
                     ) : null}
                     <Link
                       href={session.galleryUrl}

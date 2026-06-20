@@ -37,6 +37,20 @@ export function pickListPreviewAsset(assets: GalleryAssetRow[]) {
   );
 }
 
+export function pickDownloadAsset(assets: GalleryAssetRow[]) {
+  const sortedAssets = sortGalleryAssets(assets);
+
+  return (
+    sortedAssets.find((asset) => asset.kind === "layout" && asset.content_type.startsWith("image/")) ??
+    sortedAssets.find((asset) => asset.kind === "original" && asset.content_type.startsWith("image/")) ??
+    sortedAssets.find(
+      (asset) => asset.content_type.startsWith("image/") && asset.kind !== "thumbnail" && asset.kind !== "video",
+    ) ??
+    sortedAssets.find((asset) => asset.kind === "thumbnail" && asset.content_type.startsWith("image/")) ??
+    null
+  );
+}
+
 export async function serializeGalleryAsset(asset: GalleryAssetRow) {
   const viewUrl = await createPresignedGetUrl(asset.r2_key);
 

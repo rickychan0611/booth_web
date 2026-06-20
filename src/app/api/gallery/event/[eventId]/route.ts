@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleRouteError, jsonError } from "@/lib/api";
-import { pickListPreviewAsset, serializeGalleryAsset } from "@/lib/gallery/assets";
+import { pickDownloadAsset, pickListPreviewAsset, serializeGalleryAsset } from "@/lib/gallery/assets";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const EVENT_GALLERY_PAGE_SIZE = 20;
@@ -135,6 +135,7 @@ export async function GET(
       pageTickets.map(async (ticket) => {
         const ticketAssets = assetsByTicket.get(ticket.id) ?? [];
         const previewAsset = metadataOnly ? null : pickListPreviewAsset(ticketAssets);
+        const downloadAsset = metadataOnly ? null : pickDownloadAsset(ticketAssets);
 
         return {
           ticketId: ticket.id,
@@ -146,6 +147,7 @@ export async function GET(
           createdAt: ticket.created_at,
           assetCount: ticketAssets.length,
           preview: previewAsset ? await serializeGalleryAsset(previewAsset) : null,
+          download: downloadAsset ? await serializeGalleryAsset(downloadAsset) : null,
         };
       }),
     );
