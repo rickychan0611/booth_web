@@ -31,6 +31,7 @@ export function GalleryClient({
 }) {
   const [eventName, setEventName] = useState("Photo gallery");
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [bannerLinkUrl, setBannerLinkUrl] = useState<string | null>(null);
   const [assets, setAssets] = useState<GalleryAsset[]>([]);
   const [queueNumber, setQueueNumber] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -73,6 +74,7 @@ export function GalleryClient({
 
         setEventName(data.event.name);
         setBannerUrl(data.event.bannerUrl ?? null);
+        setBannerLinkUrl(data.event.bannerLinkUrl ?? null);
         setAssets(data.assets);
         setQueueNumber(data.ticket?.queueNumber ?? null);
         const savedName = data.ticket?.name?.trim() ?? "";
@@ -137,12 +139,29 @@ export function GalleryClient({
       {bannerUrl ? (
         <div className="bg-neutral-100 px-4 pt-4">
           <div className="mx-auto h-[200px] w-full max-w-[600px] overflow-hidden rounded-md bg-white shadow-sm">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={bannerUrl}
-              alt={`${eventName} banner`}
-              className="h-full w-full object-cover"
-            />
+            {bannerLinkUrl ? (
+              <a
+                href={bannerLinkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block h-full w-full"
+                aria-label="Open event banner link"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={bannerUrl}
+                  alt={`${eventName} banner`}
+                  className="h-full w-full cursor-pointer object-cover transition-opacity hover:opacity-95"
+                />
+              </a>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={bannerUrl}
+                alt={`${eventName} banner`}
+                className="h-full w-full object-cover"
+              />
+            )}
           </div>
         </div>
       ) : null}

@@ -15,7 +15,7 @@ import {
   MAX_GALLERY_BANNER_BYTES,
 } from "@/lib/uploads/gallery-banner";
 import { normalizeContentType } from "@/lib/uploads/assets";
-import { uuidSchema } from "@/lib/validation";
+import { galleryBannerLinkSchema, uuidSchema } from "@/lib/validation";
 
 export async function GET(
   _request: Request,
@@ -38,7 +38,10 @@ export async function GET(
 
     const branding = readEventBranding(event.branding);
     if (!branding.galleryBannerR2Key) {
-      return NextResponse.json({ bannerUrl: null });
+      return NextResponse.json({
+        bannerUrl: null,
+        linkUrl: branding.galleryBannerLinkUrl ?? null,
+      });
     }
 
     const bannerUrl = await createPresignedGetUrl(branding.galleryBannerR2Key);
@@ -46,6 +49,7 @@ export async function GET(
     return NextResponse.json({
       bannerUrl,
       contentType: branding.galleryBannerContentType ?? null,
+      linkUrl: branding.galleryBannerLinkUrl ?? null,
     });
   } catch (error) {
     return handleRouteError(error);
@@ -118,6 +122,52 @@ export async function POST(
     return NextResponse.json({
       bannerUrl,
       contentType,
+      branding,
+    });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ eventId: string }> },
+) {
+  try {
+    const { eventId } = await context.params;
+    uuidSchema.parse(eventId);
+
+    const body = galleryBannerLinkSchema.parse(await request.json());
+    const supabase = createServiceClient();
+    const { data: event, error: eventError } = await supabase
+      .from("events")
+      .select("id, branding")
+      .eq("id", eventId)
+      .single();
+
+    if (eventError || !event) {
+      return jsonError("Event not found", 404);
+    }
+
+    const branding = mergeEventBranding(event.branding, {
+      galleryBannerLinkUrl: body.linkUrl ?? undefined,
+    });
+
+    if (!body.linkUrl) {
+      delete branding.galleryBannerLinkUrl;
+    }
+
+    const { error: updateError } = await supabase
+      .from("events")
+      .update({ branding })
+      .eq("id", eventId);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    return NextResponse.json({
+      linkUrl: body.linkUrl,
       branding,
     });
   } catch (error) {

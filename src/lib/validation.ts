@@ -47,6 +47,23 @@ export const updateEventSchema = z.object({
   name: z.string().trim().min(1),
 });
 
+export const galleryBannerLinkSchema = z.object({
+  linkUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .transform((value) => value || null)
+    .pipe(
+      z.union([
+        z.null(),
+        z
+          .string()
+          .url("Enter a valid URL")
+          .refine((url) => /^https?:\/\//i.test(url), "Link must start with http:// or https://"),
+      ]),
+    ),
+});
+
 export const manualTicketSchema = z.object({
   eventId: uuidSchema,
   paymentMethod: paymentMethodSchema.exclude(["stripe"]),

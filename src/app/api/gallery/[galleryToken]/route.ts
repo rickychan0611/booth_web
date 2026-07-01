@@ -52,6 +52,7 @@ export async function GET(
       event: {
         name: eventResult.data.name,
         bannerUrl,
+        bannerLinkUrl: branding.galleryBannerLinkUrl ?? null,
       },
       ticket: {
         name: ticket.name,

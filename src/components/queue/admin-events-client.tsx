@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ImageUp } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ImageUp, Link2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { readEventBranding } from "@/lib/events/branding";
 import type { EventRow } from "@/types/database";
@@ -18,6 +18,10 @@ export function AdminEventsClient() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [savingEventNameId, setSavingEventNameId] = useState<string | null>(null);
+  const [bannerLinkModalEventId, setBannerLinkModalEventId] = useState<string | null>(null);
+  const [bannerLinkInput, setBannerLinkInput] = useState("");
+  const [bannerLinkError, setBannerLinkError] = useState("");
+  const [savingBannerLinkId, setSavingBannerLinkId] = useState<string | null>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const bannerEventIdRef = useRef<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -76,6 +80,73 @@ export function AdminEventsClient() {
       if (bannerInputRef.current) {
         bannerInputRef.current.value = "";
       }
+    }
+  }
+
+  function openBannerLinkModal(event: EventRow) {
+    setBannerLinkModalEventId(event.id);
+    setBannerLinkInput(readEventBranding(event.branding).galleryBannerLinkUrl ?? "");
+    setBannerLinkError("");
+  }
+
+  function closeBannerLinkModal() {
+    setBannerLinkModalEventId(null);
+    setBannerLinkInput("");
+    setBannerLinkError("");
+  }
+
+  async function saveBannerLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!bannerLinkModalEventId) return;
+
+    setSavingBannerLinkId(bannerLinkModalEventId);
+    setBannerLinkError("");
+
+    try {
+      const response = await fetch(`/api/events/${bannerLinkModalEventId}/gallery-banner`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkUrl: bannerLinkInput }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to save banner link");
+      }
+
+      closeBannerLinkModal();
+      await loadEvents();
+    } catch (saveError) {
+      setBannerLinkError(saveError instanceof Error ? saveError.message : "Unable to save banner link");
+    } finally {
+      setSavingBannerLinkId(null);
+    }
+  }
+
+  async function clearBannerLink() {
+    if (!bannerLinkModalEventId) return;
+
+    setSavingBannerLinkId(bannerLinkModalEventId);
+    setBannerLinkError("");
+
+    try {
+      const response = await fetch(`/api/events/${bannerLinkModalEventId}/gallery-banner`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkUrl: "" }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to remove banner link");
+      }
+
+      closeBannerLinkModal();
+      await loadEvents();
+    } catch (removeError) {
+      setBannerLinkError(removeError instanceof Error ? removeError.message : "Unable to remove banner link");
+    } finally {
+      setSavingBannerLinkId(null);
     }
   }
 
@@ -238,7 +309,9 @@ export function AdminEventsClient() {
           </div>
           <div className="divide-y divide-neutral-100">
             {events.map((event) => {
-              const hasBanner = Boolean(readEventBranding(event.branding).galleryBannerR2Key);
+              const branding = readEventBranding(event.branding);
+              const hasBanner = Boolean(branding.galleryBannerR2Key);
+              const hasBannerLink = Boolean(branding.galleryBannerLinkUrl);
               const isUploadingBanner = uploadingBannerEventId === event.id;
               const isRemovingBanner = removingBannerEventId === event.id;
               const isEditingName = editingEventId === event.id;
@@ -277,7 +350,8 @@ export function AdminEventsClient() {
                       {event.status} · now serving #{event.current_queue_number} · next #{event.next_queue_number}
                       {hasBanner ? (
                         <>
-                          {" · banner set "}
+                        <br/>
+                          {"Banner set "}
                           <button
                             type="button"
                             onClick={() => void removeBanner(event.id)}
@@ -288,6 +362,7 @@ export function AdminEventsClient() {
                           </button>
                         </>
                       ) : null}
+                      {hasBannerLink ? " · Banner link set" : null}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -299,6 +374,14 @@ export function AdminEventsClient() {
                     >
                       <ImageUp size={16} />
                       {isUploadingBanner ? "Uploading..." : hasBanner ? "Change banner" : "Upload banner"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openBannerLinkModal(event)}
+                      className="inline-flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold"
+                    >
+                      <Link2 size={16} />
+                      {hasBannerLink ? "Banner link" : "Banner link"}
                     </button>
                     <Link
                       className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold"
@@ -320,6 +403,64 @@ export function AdminEventsClient() {
           </div>
         </section>
       </div>
+
+      {bannerLinkModalEventId ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
+          <form
+            onSubmit={(event) => void saveBannerLink(event)}
+            className="w-full max-w-md rounded-md bg-white p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold">Banner link</h2>
+                <p className="mt-1 text-sm text-neutral-600">
+                  Guests can click the gallery banner to open this URL in a new tab.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeBannerLinkModal}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <label className="mt-5 grid gap-2 text-sm font-semibold text-neutral-700">
+              URL
+              <input
+                value={bannerLinkInput}
+                onChange={(event) => setBannerLinkInput(event.target.value)}
+                autoFocus
+                type="url"
+                placeholder="https://example.com"
+                className="h-11 rounded-md border border-neutral-300 px-3 text-base outline-none focus:border-neutral-950"
+              />
+            </label>
+            {bannerLinkError ? (
+              <p className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-rose-800">{bannerLinkError}</p>
+            ) : null}
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button type="submit" disabled={Boolean(savingBannerLinkId)}>
+                {savingBannerLinkId ? "Saving..." : "Save link"}
+              </Button>
+              {bannerLinkInput.trim() ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={Boolean(savingBannerLinkId)}
+                  onClick={() => void clearBannerLink()}
+                >
+                  Remove link
+                </Button>
+              ) : null}
+              <Button type="button" variant="secondary" onClick={closeBannerLinkModal}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </main>
   );
 }

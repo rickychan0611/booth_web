@@ -1,6 +1,7 @@
 export type EventBranding = {
   galleryBannerR2Key?: string;
   galleryBannerContentType?: string;
+  galleryBannerLinkUrl?: string;
 };
 
 export function readEventBranding(value: unknown): EventBranding {
@@ -17,6 +18,8 @@ export function readEventBranding(value: unknown): EventBranding {
       typeof branding.galleryBannerContentType === "string"
         ? branding.galleryBannerContentType
         : undefined,
+    galleryBannerLinkUrl:
+      typeof branding.galleryBannerLinkUrl === "string" ? branding.galleryBannerLinkUrl : undefined,
   };
 }
 
