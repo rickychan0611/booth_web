@@ -3,16 +3,8 @@
 import { Download, Film, ImageIcon, Share2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { GalleryFooter, GalleryHeader } from "@/components/gallery/gallery-chrome";
-import { AssetShareMenu } from "@/components/gallery/gallery-share";
+import { loadShareFile, tryNativeShareAsset, type GalleryAsset } from "@/components/gallery/gallery-share";
 import { Button } from "@/components/ui/button";
-
-type GalleryAsset = {
-  id: string;
-  kind: string;
-  contentType: string;
-  viewUrl: string;
-  downloadUrl: string;
-};
 
 function isVideoAsset(asset: GalleryAsset) {
   return asset.kind === "video" || asset.contentType.startsWith("video/");
@@ -36,14 +28,15 @@ export function GalleryClient({
   const [queueNumber, setQueueNumber] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [shareAssetId, setShareAssetId] = useState<string | null>(null);
+  const [sharingAssetId, setSharingAssetId] = useState<string | null>(null);
+  const [shareFilesById, setShareFilesById] = useState<Record<string, File>>({});
+  const [shareError, setShareError] = useState("");
   const [enlargedAssetId, setEnlargedAssetId] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [nameModalOpen, setNameModalOpen] = useState(false);
   const [nameError, setNameError] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
 
-  const shareAsset = assets.find((asset) => asset.id === shareAssetId) ?? null;
   const enlargedAsset = assets.find((asset) => asset.id === enlargedAssetId) ?? null;
   const isNamePromptBlocking = nameModalOpen && !isLoading && !error;
 
@@ -93,6 +86,42 @@ export function GalleryClient({
     loadGallery();
   }, [galleryToken]);
 
+  useEffect(() => {
+    if (!assets.length) {
+      setShareFilesById({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function preloadShareFiles() {
+      const entries = await Promise.all(
+        assets.map(async (asset) => {
+          const file = await loadShareFile(galleryToken, asset);
+          return file ? ([asset.id, file] as const) : null;
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const next: Record<string, File> = {};
+      for (const entry of entries) {
+        if (entry) {
+          next[entry[0]] = entry[1];
+        }
+      }
+      setShareFilesById(next);
+    }
+
+    void preloadShareFiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assets, galleryToken]);
+
   async function saveGuestName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextName = nameInput.trim();
@@ -131,14 +160,32 @@ export function GalleryClient({
     setNameModalOpen(false);
   }
 
+  async function handleShareClick(asset: GalleryAsset) {
+    setSharingAssetId(asset.id);
+    setShareError("");
+
+    const outcome = await tryNativeShareAsset({
+      asset,
+      eventName,
+      sharePageUrl,
+      shareFile: shareFilesById[asset.id] ?? null,
+    });
+
+    setSharingAssetId(null);
+
+    if (outcome === "unsupported") {
+      setShareError("Sharing is not supported here. Open this gallery in Safari or Chrome on your phone.");
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-neutral-100 text-neutral-950">
       <div className="flex min-h-screen flex-col" inert={isNamePromptBlocking ? true : undefined}>
       <GalleryHeader />
 
       {bannerUrl ? (
-        <div className="bg-neutral-100 px-4 pt-4">
-          <div className="mx-auto h-[200px] w-full max-w-[600px] overflow-hidden rounded-md bg-white shadow-sm">
+        <div className="bg-neutral-100 sm:px-4 sm:pt-4">
+          <div className="w-full sm:mx-auto sm:max-w-[600px] sm:overflow-hidden sm:rounded-md sm:bg-white sm:shadow-sm">
             {bannerLinkUrl ? (
               <a
                 href={bannerLinkUrl}
@@ -151,7 +198,7 @@ export function GalleryClient({
                 <img
                   src={bannerUrl}
                   alt={`${eventName} banner`}
-                  className="h-full w-full cursor-pointer object-cover transition-opacity hover:opacity-95"
+                  className="block h-auto w-full cursor-pointer transition-opacity hover:opacity-95"
                 />
               </a>
             ) : (
@@ -159,7 +206,7 @@ export function GalleryClient({
               <img
                 src={bannerUrl}
                 alt={`${eventName} banner`}
-                className="h-full w-full object-cover"
+                className="block h-auto w-full"
               />
             )}
           </div>
@@ -186,6 +233,9 @@ export function GalleryClient({
           ) : null}
 
           <section className="grid w-full max-w-md gap-5">
+            {shareError ? (
+              <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-800">{shareError}</p>
+            ) : null}
             {assets.map((asset) => (
               <article key={asset.id} className="overflow-hidden rounded-md bg-white shadow-sm">
                 {!isVideoAsset(asset) && queueNumber !== null ? (
@@ -226,11 +276,12 @@ export function GalleryClient({
                 <div className="flex items-center justify-end gap-2 p-3">
                   <button
                     type="button"
-                    onClick={() => setShareAssetId(asset.id)}
-                    className="inline-flex items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-950 hover:bg-neutral-50"
+                    disabled={sharingAssetId === asset.id}
+                    onClick={() => void handleShareClick(asset)}
+                    className="inline-flex items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-950 hover:bg-neutral-50 disabled:opacity-60"
                   >
                     <Share2 size={16} />
-                    Share
+                    {sharingAssetId === asset.id ? "Preparing..." : "Share"}
                   </button>
                   <a
                     href={asset.downloadUrl}
@@ -248,16 +299,6 @@ export function GalleryClient({
       </main>
 
       <GalleryFooter />
-
-      {shareAsset ? (
-        <AssetShareMenu
-          asset={shareAsset}
-          eventName={eventName}
-          sharePageUrl={sharePageUrl}
-          open={Boolean(shareAsset)}
-          onClose={() => setShareAssetId(null)}
-        />
-      ) : null}
 
       {enlargedAsset?.contentType.startsWith("image/") ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/92 p-4">
