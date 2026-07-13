@@ -486,16 +486,23 @@ export function ViboLandingPage() {
                     <p className="mt-1 text-sm font-semibold tracking-[0.12em] text-neutral-500">{pkg.duration}</p>
                   </div>
                   <ul className="flex-1 space-y-3 px-6 pb-4 text-sm">
-                    {pricingFeatureLabels.map((feature, index) => (
-                      <li key={feature} className="flex items-start gap-2">
-                        {pkg.included[index] ? (
-                          <Check size={16} className={`mt-0.5 shrink-0 ${checkClass}`} />
-                        ) : (
-                          <Minus size={16} className="mt-0.5 shrink-0 text-neutral-300" />
-                        )}
-                        <span className={pkg.included[index] ? "text-neutral-800" : "text-neutral-400"}>{feature}</span>
-                      </li>
-                    ))}
+                    {pricingFeatureLabels.map((feature, index) => {
+                      const label =
+                        feature === "6 Complimentary Custom Props" && pkg.price === "$400"
+                          ? "4 Complimentary Custom Props"
+                          : feature;
+
+                      return (
+                        <li key={feature} className="flex items-start gap-2">
+                          {pkg.included[index] ? (
+                            <Check size={16} className={`mt-0.5 shrink-0 ${checkClass}`} />
+                          ) : (
+                            <Minus size={16} className="mt-0.5 shrink-0 text-neutral-300" />
+                          )}
+                          <span className={pkg.included[index] ? "text-neutral-800" : "text-neutral-400"}>{label}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                   <p className="px-6 pb-4 text-sm font-semibold text-[#c86d45]">Additional Hours: $100/hr</p>
                   <div className="px-6 pb-6">
@@ -739,7 +746,7 @@ export function ViboLandingPage() {
                 aria-label="Book now — summer promotion"
               >
                 <Image
-                  src="/images/summer-promo.jpg"
+                  src="/images/summer-promo.png"
                   alt="Limited-time summer promotion: photo booth rental $150 per hour, save 25%"
                   width={1120}
                   height={280}
