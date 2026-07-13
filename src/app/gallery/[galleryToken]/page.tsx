@@ -14,6 +14,7 @@ export async function generateMetadata({ params }: GalleryPageProps): Promise<Me
   if (!meta) {
     return {
       title: "Gallery not found | Vibo Photo Booth",
+      robots: { index: false, follow: false },
     };
   }
 
@@ -25,6 +26,7 @@ export async function generateMetadata({ params }: GalleryPageProps): Promise<Me
   return {
     title: `${meta.eventName} | Vibo Photo Booth`,
     description,
+    robots: { index: false, follow: false },
     openGraph: {
       title: `My photos from ${meta.eventName}`,
       description,

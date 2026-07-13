@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { useState, type FormEvent, type MouseEvent } from "react";
+import { faqs } from "@/components/landing/vibo-faqs";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -111,9 +112,11 @@ function galleryPhotoPath(filename: string) {
 }
 
 function galleryCaption(filename: string) {
-  if (filename === "wedding.jpg") return "Wedding";
+  if (filename === "wedding.jpg") return "Vibo wedding photo booth in Vancouver";
   const match = filename.match(/photo \((\d+)\)/i);
-  return match ? `Event photo ${match[1]}` : "Event photo";
+  return match
+    ? `Vibo Photo Booth Vancouver event photo ${match[1]}`
+    : "Vibo Photo Booth Vancouver event photo";
 }
 
 function galleryAspectClass(index: number) {
@@ -195,12 +198,6 @@ const navLinks = [
   { href: "#book", label: "Book Now" },
 ] as const;
 
-const faqs = [
-  ["Where do you serve?", "Vibo Photo Booth serves Vancouver, Richmond, Burnaby, Surrey, and the Lower Mainland."],
-  ["Are prints unlimited?", "Yes, unlimited prints can be included so guests can enjoy the booth throughout the event."],
-  ["Can the design match my event?", "Yes. Custom photo booth templates can be made for weddings, parties, and corporate branding."],
-  ["Do guests get digital photos?", "Yes. Guests can access photos through a private online gallery after upload."],
-];
 
 function scrollToSection(href: string) {
   const id = href.slice(1);
@@ -356,14 +353,14 @@ export function ViboLandingPage() {
 
       <section className="relative bg-[#0b0a08] px-4 pb-16 text-left sm:px-6 sm:pb-24">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-screen">
-          <Image src={images.hero} alt="Vibo Photo Booth event setup" fill priority sizes="100vw" className="object-cover object-right" />
+          <Image src={images.hero} alt="Vibo gold photo booth rental setup for events in Vancouver" fill priority sizes="100vw" className="object-cover object-right" />
           {/* <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/42 to-[#0b0a08]" /> */}
         </div>
 
         <div className="relative z-10 mx-auto w-full max-w-7xl pt-[80vh] pb-8 sm:flex sm:min-h-screen sm:items-center sm:py-16 lg:pl-16 xl:pl-24">
           <div className="w-full max-w-4xl">
           <h1 className={`${playfair.className} sm:mt-6 text-5xl font-bold leading-tight sm:text-7xl lg:text-8xl`}>
-            Make Your Event <span className="text-amber-300 italic">Unforgettable</span> With Vibo
+            Make Your Event <span className="text-amber-300 italic">Unforgettable</span> With Vibo Photo Booth
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-white/72">
             A gold framed 43 inch touch screen photo booth with unlimited prints, custom templates, fun props,
