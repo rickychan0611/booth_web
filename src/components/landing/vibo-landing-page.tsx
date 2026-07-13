@@ -555,12 +555,12 @@ export function ViboLandingPage() {
             </article>
           </div>
 
-          <div className="mt-8 flex items-center justify-center gap-3 rounded-lg bg-[#f5efe1] px-5 py-4 text-center">
+          {/* <div className="mt-8 flex items-center justify-center gap-3 rounded-lg bg-[#f5efe1] px-5 py-4 text-center">
             <Gift size={20} className="shrink-0 text-[#c86d45]" />
             <p className="text-sm font-bold text-[#c86d45] sm:text-base">
               SUMMER PROMOTION: FREE 6 Custom Props Included With Every Booking!
             </p>
-          </div>
+          </div> */}
 
           <p className="mt-6 flex items-start justify-center gap-2 text-center text-xs text-neutral-500">
             <Info size={14} className="mt-0.5 shrink-0" />
