@@ -165,8 +165,8 @@ const pricingPackages = [
   },
   {
     name: "CORPORATE & PREMIUM",
-    price: "$700",
-    duration: "4 HOURS",
+    price: "$550",
+    duration: "2 HOURS",
     popular: false,
     accent: "teal" as const,
     included: [true, true, true, true, true, true, true, true, true],
