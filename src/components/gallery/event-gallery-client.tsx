@@ -1,18 +1,17 @@
 "use client";
 
-import { Download, Film, ImageIcon, Search } from "lucide-react";
+import { Download, ImageIcon, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const PAGE_SIZE = 20;
 
 type GalleryPreview = {
-  id: string;
-  kind: string;
   contentType: string;
   viewUrl: string;
-  downloadUrl: string;
+  width: number | null;
+  height: number | null;
 };
 
 type GallerySession = {
@@ -25,7 +24,6 @@ type GallerySession = {
   createdAt: string;
   assetCount: number;
   preview: GalleryPreview | null;
-  download: GalleryPreview | null;
 };
 
 type Pagination = {
@@ -34,21 +32,7 @@ type Pagination = {
   totalSessions: number;
   totalPages: number;
   totalAssets: number;
-  search?: string;
 };
-
-function formatDate(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
 
 function csvCell(value: string | number | null | undefined) {
   const stringValue = value === null || value === undefined ? "" : String(value);
@@ -57,33 +41,6 @@ function csvCell(value: string | number | null | undefined) {
 
 function eventFileName(eventName: string) {
   return `${eventName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "event"}-gallery.csv`;
-}
-
-function isVideoPreview(preview: GalleryPreview | null) {
-  return Boolean(preview && (preview.kind === "video" || preview.contentType.startsWith("video/")));
-}
-
-function sessionImageFilename(queueNumber: number, contentType: string) {
-  if (contentType.includes("png")) return `photo-${queueNumber}.png`;
-  if (contentType.includes("webp")) return `photo-${queueNumber}.webp`;
-  return `photo-${queueNumber}.jpg`;
-}
-
-async function downloadSessionImage(url: string, filename: string) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Could not download this image");
-  }
-
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(objectUrl);
 }
 
 export function EventGalleryClient({ eventId }: { eventId: string }) {
@@ -96,9 +53,13 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
-  const [downloadingTicketId, setDownloadingTicketId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const requestIdRef = useRef(0);
 
   const loadEventGallery = useCallback(async (requestedPage: number, searchQuery: string) => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     setError("");
 
@@ -107,53 +68,89 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
         page: String(requestedPage),
         limit: String(PAGE_SIZE),
       });
-      if (searchQuery) {
-        params.set("search", searchQuery);
-      }
+      if (searchQuery) params.set("search", searchQuery);
 
       const response = await fetch(`/api/gallery/event/${eventId}?${params.toString()}`);
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "Event gallery not found");
-      }
+      if (!response.ok) throw new Error(data.error ?? "Event gallery not found");
+      if (requestId !== requestIdRef.current) return;
 
       setEventName(data.event.name);
-      setSessions(data.sessions);
+      setSessions((current) => {
+        const merged = requestedPage === 1 ? data.sessions : [...current, ...data.sessions];
+        return Array.from(
+          new Map(
+            (merged as GallerySession[]).map((session) => [session.ticketId, session]),
+          ).values(),
+        );
+      });
       setPagination(data.pagination);
       setPage(data.pagination.page);
     } catch (loadError) {
+      if (requestId !== requestIdRef.current) return;
       setError(loadError instanceof Error ? loadError.message : "Event gallery not found");
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) setIsLoading(false);
     }
   }, [eventId]);
 
   useEffect(() => {
+    async function loadAdminSession() {
+      const response = await fetch("/api/admin/auth");
+      if (!response.ok) return;
+      const data = await response.json();
+      setIsAdmin(Boolean(data.isAdmin));
+    }
+
+    void loadAdminSession();
+  }, []);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setDebouncedSearch(search.trim());
+      const nextSearch = search.trim();
+      if (nextSearch === debouncedSearch) return;
+
+      setDebouncedSearch(nextSearch);
+      setPage(1);
+      setSessions([]);
     }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [search, debouncedSearch]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadEventGallery(page, debouncedSearch);
+    }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [search]);
+  }, [page, debouncedSearch, loadEventGallery]);
 
   useEffect(() => {
-    setPage(1);
-    setSearch("");
-    setDebouncedSearch("");
-  }, [eventId]);
+    const target = loadMoreRef.current;
+    if (!target || isLoading || !pagination || page >= pagination.totalPages) return;
 
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setPage((current) => Math.min(current + 1, pagination.totalPages));
+        }
+      },
+      { rootMargin: "600px 0px" },
+    );
 
-  useEffect(() => {
-    void loadEventGallery(page, debouncedSearch);
-  }, [eventId, page, debouncedSearch, loadEventGallery]);
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [isLoading, page, pagination]);
 
   const totalAssets = pagination?.totalAssets ?? 0;
   const totalSessions = pagination?.totalSessions ?? 0;
   const isSearching = debouncedSearch.length > 0;
+  const photos = sessions.filter(
+    (session): session is GallerySession & { preview: GalleryPreview } =>
+      session.preview?.contentType.startsWith("image/") === true &&
+      Boolean(session.preview.viewUrl),
+  );
 
   async function exportCsv() {
     setIsExporting(true);
@@ -161,10 +158,7 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
     try {
       const response = await fetch(`/api/gallery/event/${eventId}?metadataOnly=1`);
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "Could not export gallery list");
-      }
+      if (!response.ok) throw new Error(data.error ?? "Could not export gallery list");
 
       const rows = [
         ["Event", "Photo Number", "Name", "Phone Number", "Gallery URL", "File Count", "Used At", "Created At"],
@@ -196,34 +190,36 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
     }
   }
 
-  async function handleDownloadSession(session: GallerySession) {
-    const download = session.download;
-    if (!download) return;
+  async function deleteSession(session: GallerySession) {
+    if (!window.confirm(`Permanently delete all ${session.assetCount} files in photo #${session.queueNumber}?`)) {
+      return;
+    }
 
+    setDeletingTicketId(session.ticketId);
+    setError("");
     try {
-      setDownloadingTicketId(session.ticketId);
-      setError("");
-      await downloadSessionImage(
-        download.downloadUrl,
-        sessionImageFilename(session.queueNumber, download.contentType),
-      );
-    } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : "Could not download this image");
+      const response = await fetch(`/api/admin/sessions/${session.ticketId}/assets`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not delete gallery files");
+
+      setSessions((current) => current.filter((item) => item.ticketId !== session.ticketId));
+      setPagination((current) => current ? {
+        ...current,
+        totalSessions: Math.max(0, current.totalSessions - 1),
+        totalAssets: Math.max(0, current.totalAssets - data.deletedFileCount),
+      } : current);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Could not delete gallery files");
     } finally {
-      setDownloadingTicketId(null);
+      setDeletingTicketId(null);
     }
   }
 
-  const pageLabel = useMemo(() => {
-    if (!pagination || pagination.totalSessions === 0) return "";
-    const start = (pagination.page - 1) * pagination.pageSize + 1;
-    const end = Math.min(pagination.page * pagination.pageSize, pagination.totalSessions);
-    return `Showing ${start}-${end} of ${pagination.totalSessions}`;
-  }, [pagination]);
-
   return (
-    <main className="min-h-screen bg-neutral-100 px-4 py-8 text-neutral-950">
-      <div className="mx-auto w-full max-w-3xl">
+    <main className="min-h-screen bg-[#f4f2ef] px-4 py-8 text-neutral-950 sm:px-8">
+      <div className="mx-auto w-full max-w-[1500px]">
         <header className="mb-8 grid gap-4 text-center sm:grid-cols-[1fr_auto] sm:items-end sm:text-left">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Event gallery</p>
@@ -235,18 +231,20 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
               </p>
             ) : null}
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void exportCsv()}
-            disabled={isLoading || isExporting || totalSessions === 0}
-          >
-            <Download size={16} />
-            {isExporting ? "Exporting..." : "Export CSV"}
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void exportCsv()}
+              disabled={isLoading || isExporting || totalSessions === 0}
+            >
+              <Download size={16} />
+              {isExporting ? "Exporting..." : "Export CSV"}
+            </Button>
+          </div>
         </header>
 
-        <label className="mb-6 block">
+        <label className="mb-10 block">
           <span className="sr-only">Search by photo number or phone number</span>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
@@ -259,7 +257,9 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
           </div>
         </label>
 
-        {isLoading ? <p className="text-center text-neutral-600">Loading event gallery...</p> : null}
+        {isLoading && sessions.length === 0 ? (
+          <p className="text-center text-neutral-600">Loading event gallery...</p>
+        ) : null}
         {error ? <p className="rounded-md bg-rose-50 p-4 text-rose-800">{error}</p> : null}
 
         {!isLoading && !error && sessions.length === 0 ? (
@@ -274,94 +274,49 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
           </section>
         ) : null}
 
-        <section className="grid gap-3">
-          {sessions.map((session) => {
-            const preview = session.preview;
-            const sessionDate = formatDate(session.usedAt ?? session.createdAt);
-
-            return (
-              <article key={session.ticketId} className="grid grid-cols-[96px_1fr] gap-4 rounded-md bg-white p-3 shadow-sm sm:grid-cols-[128px_1fr]">
-                <Link href={session.galleryUrl} className="relative grid aspect-square place-items-center overflow-hidden rounded-md bg-neutral-100">
-                  {preview && !isVideoPreview(preview) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={preview.viewUrl} alt={`Photo ${session.queueNumber}`} className="h-full w-full object-cover" />
-                  ) : preview && isVideoPreview(preview) ? (
-                    <>
-                      <video className="h-full w-full object-cover" muted playsInline preload="metadata" src={preview.viewUrl}>
-                        <track kind="captions" />
-                      </video>
-                      <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white">
-                        <Film size={12} />
-                        Video
-                      </span>
-                    </>
-                  ) : (
-                    <ImageIcon size={28} className="text-neutral-400" />
-                  )}
-                </Link>
-
-                <div className="grid min-w-0 content-center gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-lg font-bold">{session.name || "No name yet"}</p>
-                    <p className="truncate text-sm text-neutral-600">{session.phoneNumber || "No phone number"}</p>
-                    <p className="text-sm text-neutral-500">
-                      Photo #{session.queueNumber}{sessionDate ? ` · ${sessionDate}` : ""}
-                    </p>
-                    <p className="text-xs text-neutral-400">
-                      {session.assetCount} file{session.assetCount === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {session.download ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleDownloadSession(session)}
-                        disabled={downloadingTicketId === session.ticketId}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-950 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <Download size={16} />
-                        {downloadingTicketId === session.ticketId ? "Downloading..." : "Download"}
-                      </button>
-                    ) : null}
-                    <Link
-                      href={session.galleryUrl}
-                      className="inline-flex h-10 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white"
-                    >
-                      Open Gallery
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+        <section className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+          {photos.map((session, index) => (
+            <article
+              key={session.ticketId}
+              className="event-gallery-tile group relative overflow-hidden bg-neutral-200 shadow-sm"
+              style={{ animationDelay: `${Math.min(index, 18) * 45}ms` }}
+            >
+              <Link href={session.galleryUrl} aria-label={`Open photo ${session.queueNumber}`} className="block">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={session.preview.viewUrl}
+                  alt=""
+                  width={session.preview.width ?? 1200}
+                  height={session.preview.height ?? 800}
+                  loading={index < 9 ? "eager" : "lazy"}
+                  decoding="async"
+                  className="h-auto w-full transition duration-500 ease-out group-hover:scale-[1.015]"
+                />
+                <span className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/[0.04]" />
+              </Link>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => void deleteSession(session)}
+                  disabled={deletingTicketId === session.ticketId}
+                  aria-label={`Delete all files in photo ${session.queueNumber}`}
+                  className="absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-rose-600 text-white shadow-lg hover:bg-rose-700 disabled:opacity-60"
+                >
+                  <Trash2 size={18} />
+                </button>
+              ) : null}
+            </article>
+          ))}
         </section>
 
-        {!isLoading && !error && pagination && pagination.totalPages > 1 ? (
-          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
-            <p className="text-sm text-neutral-600">{pageLabel}</p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={pagination.page <= 1 || isLoading}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </Button>
-              <span className="px-2 text-sm font-medium text-neutral-700">
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={pagination.page >= pagination.totalPages || isLoading}
-                onClick={() => setPage((current) => current + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        <div ref={loadMoreRef} className="grid h-24 place-items-center" aria-live="polite">
+          {isLoading && sessions.length > 0 ? (
+            <span
+              aria-label="Loading more photos"
+              className="h-7 w-7 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-800"
+            />
+          ) : null}
+        </div>
       </div>
     </main>
   );

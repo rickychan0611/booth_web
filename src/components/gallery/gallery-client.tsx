@@ -1,17 +1,13 @@
 "use client";
 
-import { Download, Film, ImageIcon, Share2, X } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { ArrowLeft, Download, ImageIcon, Share2, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { GalleryFooter, GalleryHeader } from "@/components/gallery/gallery-chrome";
 import { loadShareFile, tryNativeShareAsset, type GalleryAsset } from "@/components/gallery/gallery-share";
-import { Button } from "@/components/ui/button";
 
 function isVideoAsset(asset: GalleryAsset) {
   return asset.kind === "video" || asset.contentType.startsWith("video/");
-}
-
-function namePromptSkipKey(galleryToken: string) {
-  return `gallery-name-skipped:${galleryToken}`;
 }
 
 export function GalleryClient({
@@ -22,6 +18,7 @@ export function GalleryClient({
   sharePageUrl: string;
 }) {
   const [eventName, setEventName] = useState("Photo gallery");
+  const [eventId, setEventId] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [bannerLinkUrl, setBannerLinkUrl] = useState<string | null>(null);
   const [assets, setAssets] = useState<GalleryAsset[]>([]);
@@ -32,28 +29,21 @@ export function GalleryClient({
   const [shareFilesById, setShareFilesById] = useState<Record<string, File>>({});
   const [shareError, setShareError] = useState("");
   const [enlargedAssetId, setEnlargedAssetId] = useState<string | null>(null);
-  const [nameInput, setNameInput] = useState("");
-  const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [nameError, setNameError] = useState("");
-  const [isSavingName, setIsSavingName] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
 
   const enlargedAsset = assets.find((asset) => asset.id === enlargedAssetId) ?? null;
-  const isNamePromptBlocking = nameModalOpen && !isLoading && !error;
 
   useEffect(() => {
-    if (!isNamePromptBlocking) {
-      return;
+    async function loadAdminSession() {
+      const response = await fetch("/api/admin/auth");
+      if (!response.ok) return;
+      const data = await response.json();
+      setIsAdmin(Boolean(data.isAdmin));
     }
 
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isNamePromptBlocking]);
+    void loadAdminSession();
+  }, []);
 
   useEffect(() => {
     async function loadGallery() {
@@ -66,16 +56,11 @@ export function GalleryClient({
         }
 
         setEventName(data.event.name);
+        setEventId(data.event.id);
         setBannerUrl(data.event.bannerUrl ?? null);
         setBannerLinkUrl(data.event.bannerLinkUrl ?? null);
         setAssets(data.assets);
         setQueueNumber(data.ticket?.queueNumber ?? null);
-        const savedName = data.ticket?.name?.trim() ?? "";
-        setNameInput(savedName);
-        const skippedNamePrompt =
-          typeof window !== "undefined" &&
-          sessionStorage.getItem(namePromptSkipKey(galleryToken)) === "1";
-        setNameModalOpen(!savedName && !skippedNamePrompt);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Gallery not found");
       } finally {
@@ -87,10 +72,7 @@ export function GalleryClient({
   }, [galleryToken]);
 
   useEffect(() => {
-    if (!assets.length) {
-      setShareFilesById({});
-      return;
-    }
+    if (!assets.length) return;
 
     let cancelled = false;
 
@@ -122,44 +104,6 @@ export function GalleryClient({
     };
   }, [assets, galleryToken]);
 
-  async function saveGuestName(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextName = nameInput.trim();
-    if (!nextName) {
-      setNameError("Please enter your name.");
-      return;
-    }
-
-    try {
-      setIsSavingName(true);
-      setNameError("");
-      const response = await fetch(`/api/gallery/${galleryToken}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nextName }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error ?? "Could not save your name.");
-      }
-      setNameModalOpen(false);
-    } catch (saveError) {
-      setNameError(saveError instanceof Error ? saveError.message : "Could not save your name.");
-    } finally {
-      setIsSavingName(false);
-    }
-  }
-
-  function skipGuestName() {
-    setNameError("");
-    try {
-      sessionStorage.setItem(namePromptSkipKey(galleryToken), "1");
-    } catch {
-      // Ignore storage errors (private browsing, etc.)
-    }
-    setNameModalOpen(false);
-  }
-
   async function handleShareClick(asset: GalleryAsset) {
     setSharingAssetId(asset.id);
     setShareError("");
@@ -178,10 +122,47 @@ export function GalleryClient({
     }
   }
 
+  async function deleteAsset(asset: GalleryAsset) {
+    if (!window.confirm("Permanently delete this file from the gallery and cloud storage?")) return;
+
+    setDeletingAssetId(asset.id);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/assets/${asset.id}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not delete file");
+
+      setAssets((current) => current.filter((item) => item.id !== asset.id));
+      setShareFilesById((current) => {
+        const next = { ...current };
+        delete next[asset.id];
+        return next;
+      });
+      setEnlargedAssetId((current) => current === asset.id ? null : current);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Could not delete file");
+    } finally {
+      setDeletingAssetId(null);
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-neutral-100 text-neutral-950">
-      <div className="flex min-h-screen flex-col" inert={isNamePromptBlocking ? true : undefined}>
       <GalleryHeader />
+
+      {eventId ? (
+        <div className="px-4 pt-4">
+          <div className="mx-auto w-full max-w-4xl">
+            <Link
+              href={`/gallery/event/${eventId}`}
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-semibold text-neutral-950 shadow-sm hover:bg-neutral-50"
+            >
+              <ArrowLeft size={16} />
+              Back to Event gallery
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {bannerUrl ? (
         <div className="bg-neutral-100 sm:px-4 sm:pt-4">
@@ -232,48 +213,34 @@ export function GalleryClient({
             </section>
           ) : null}
 
-          <section className="grid w-full max-w-md gap-5">
+          <section className="grid w-full max-w-3xl gap-8">
             {shareError ? (
               <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-800">{shareError}</p>
             ) : null}
             {assets.map((asset) => (
-              <article key={asset.id} className="overflow-hidden rounded-md bg-white shadow-sm">
-                {!isVideoAsset(asset) && queueNumber !== null ? (
-                  <p className="px-3 pt-2 text-xs font-medium text-neutral-500">Photo #{queueNumber}</p>
-                ) : null}
-                {isVideoAsset(asset) ? (
-                  <div className="bg-neutral-950">
-                    <video
-                      className="aspect-video w-full"
-                      controls
-                      playsInline
-                      preload="metadata"
-                      src={asset.viewUrl}
+              <article
+                key={asset.id}
+                className={`relative overflow-hidden rounded-lg bg-white shadow-sm ${isVideoAsset(asset) ? "mx-auto w-full max-w-[460px]" : "w-full"}`}
+              >
+                <div className="flex flex-wrap items-center gap-2 p-3">
+                  <p className="mr-auto flex items-center gap-2 text-xs font-medium text-neutral-500">
+                    {isVideoAsset(asset)
+                      ? "Video"
+                      : queueNumber !== null
+                        ? `#${queueNumber}`
+                        : ""}
+                  </p>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      disabled={deletingAssetId === asset.id}
+                      onClick={() => void deleteAsset(asset)}
+                      className="inline-flex items-center gap-2 rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
                     >
-                      <track kind="captions" />
-                    </video>
-                    <p className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white">
-                      <Film size={16} />
-                      Session video
-                    </p>
-                  </div>
-                ) : asset.contentType.startsWith("image/") ? (
-                  <button
-                    type="button"
-                    className="block w-full bg-white"
-                    onClick={() => setEnlargedAssetId(asset.id)}
-                    aria-label="Open image full screen"
-                  >
-                    {/* Presigned R2 URLs are not compatible with next/image optimization. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={asset.viewUrl} alt="Photo booth layout" className="h-auto w-full object-contain" />
-                  </button>
-                ) : (
-                  <div className="grid min-h-64 place-items-center bg-neutral-200">
-                    <ImageIcon size={36} />
-                  </div>
-                )}
-                <div className="flex items-center justify-end gap-2 p-3">
+                      <Trash2 size={16} />
+                      {deletingAssetId === asset.id ? "Deleting..." : "Delete"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     disabled={sharingAssetId === asset.id}
@@ -292,6 +259,35 @@ export function GalleryClient({
                     {asset.kind === "video" ? "Download video" : "Download"}
                   </a>
                 </div>
+                {isVideoAsset(asset) ? (
+                  <div className="relative aspect-[9/16] w-full overflow-hidden bg-black">
+                    <video
+                      className="gallery-portrait-video absolute inset-0 h-full w-full object-cover"
+                      controls
+                      playsInline
+                      loop
+                      preload="metadata"
+                      src={asset.viewUrl}
+                    >
+                      <track kind="captions" />
+                    </video>
+                  </div>
+                ) : asset.contentType.startsWith("image/") ? (
+                  <button
+                    type="button"
+                    className="block w-full bg-white"
+                    onClick={() => setEnlargedAssetId(asset.id)}
+                    aria-label="Open image full screen"
+                  >
+                    {/* Presigned R2 URLs are not compatible with next/image optimization. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={asset.viewUrl} alt="Photo booth layout" className="h-auto w-full object-contain" />
+                  </button>
+                ) : (
+                  <div className="grid min-h-64 place-items-center bg-neutral-200">
+                    <ImageIcon size={36} />
+                  </div>
+                )}
               </article>
             ))}
           </section>
@@ -326,51 +322,6 @@ export function GalleryClient({
         </div>
       ) : null}
 
-      </div>
-
-      {isNamePromptBlocking ? (
-        <div
-          className="fixed inset-0 z-[100] grid place-items-center bg-black/70 px-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="gallery-name-prompt-title"
-        >
-          <form
-            onSubmit={saveGuestName}
-            className="relative w-full max-w-sm rounded-md bg-white p-6 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="gallery-name-prompt-title" className="text-2xl font-bold">
-              What's your name?
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-neutral-600">
-              Add your name so this gallery is easier to identify later.
-            </p>
-            <label className="mt-5 grid gap-2 text-sm font-semibold text-neutral-700">
-              Name
-              <input
-                value={nameInput}
-                onChange={(event) => setNameInput(event.target.value)}
-                autoFocus
-                required
-                maxLength={80}
-                className="h-12 rounded-md border border-neutral-300 px-4 text-base outline-none focus:border-neutral-950"
-              />
-            </label>
-            {nameError ? <p className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-rose-800">{nameError}</p> : null}
-            <Button type="submit" className="mt-5 w-full" disabled={isSavingName || !nameInput.trim()}>
-              {isSavingName ? "Saving..." : "Save Name"}
-            </Button>
-            <button
-              type="button"
-              onClick={skipGuestName}
-              className="mt-3 w-full py-2 text-sm font-medium text-neutral-500 hover:text-neutral-800"
-            >
-              Skip for now
-            </button>
-          </form>
-        </div>
-      ) : null}
     </div>
   );
 }

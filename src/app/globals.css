@@ -58,3 +58,47 @@ body {
     0 0 48px rgba(234, 179, 8, 0.25),
     0 10px 28px rgba(0, 0, 0, 0.45);
 }
+
+@keyframes event-gallery-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.event-gallery-tile {
+  opacity: 0;
+  animation: event-gallery-reveal 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-gallery-tile {
+    opacity: 1;
+    animation: none;
+  }
+
+  .event-gallery-tile img,
+  .event-gallery-tile span {
+    transition: none;
+  }
+}
+
+.gallery-portrait-video:fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+}
+
+.gallery-portrait-video:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+}

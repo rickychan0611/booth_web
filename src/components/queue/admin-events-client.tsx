@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ImageUp, Link2, X } from "lucide-react";
+import { ImageUp, Link2, LogOut, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { readEventBranding } from "@/lib/events/branding";
 import type { EventRow } from "@/types/database";
 
 export function AdminEventsClient() {
+  const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [name, setName] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -252,13 +254,24 @@ export function AdminEventsClient() {
     }
   }
 
+  async function signOut() {
+    await fetch("/api/admin/auth", { method: "DELETE" });
+    router.refresh();
+  }
+
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-neutral-950">
       <div className="mx-auto max-w-5xl">
-        <header>
-          <p className="text-sm font-semibold uppercase tracking-wide text-rose-600">Admin</p>
-          <h1 className="text-3xl font-bold">Events</h1>
-          <p className="mt-2 text-neutral-600">Create an event, then open the staff or booth view for operations.</p>
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-rose-600">Admin</p>
+            <h1 className="text-3xl font-bold">Events</h1>
+            <p className="mt-2 text-neutral-600">Create an event, then open the staff or booth view for operations.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={() => void signOut()}>
+            <LogOut size={16} />
+            Sign out
+          </Button>
         </header>
 
         {error ? <p className="mt-5 rounded-md bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
