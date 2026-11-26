@@ -4,6 +4,7 @@ import { Download, ImageIcon, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { EventPhotoViewer } from "@/components/gallery/event-photo-viewer";
 
 const PAGE_SIZE = 20;
 
@@ -55,6 +56,7 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<GallerySession | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
 
@@ -274,14 +276,19 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
           </section>
         ) : null}
 
-        <section className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+        <section aria-label="Event photos" className="columns-1 gap-5 sm:columns-2 lg:columns-3 lg:gap-6">
           {photos.map((session, index) => (
             <article
               key={session.ticketId}
-              className="event-gallery-tile group relative overflow-hidden bg-neutral-200 shadow-sm"
+              className="event-gallery-tile mb-5 break-inside-avoid overflow-hidden rounded-lg bg-white shadow-sm lg:mb-6"
               style={{ animationDelay: `${Math.min(index, 18) * 45}ms` }}
             >
-              <Link href={session.galleryUrl} aria-label={`Open photo ${session.queueNumber}`} className="block">
+              <button
+                type="button"
+                onClick={() => setSelectedPhoto(session)}
+                aria-label={`Enlarge photo ${session.queueNumber}`}
+                className="flex w-full cursor-zoom-in justify-center bg-neutral-200/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-neutral-950"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={session.preview.viewUrl}
@@ -290,21 +297,29 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
                   height={session.preview.height ?? 800}
                   loading={index < 9 ? "eager" : "lazy"}
                   decoding="async"
-                  className="h-auto w-full transition duration-500 ease-out group-hover:scale-[1.015]"
+                  className="block h-auto max-h-[65svh] w-auto max-w-full object-contain sm:max-h-[480px]"
                 />
-                <span className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/[0.04]" />
-              </Link>
-              {isAdmin ? (
-                <button
-                  type="button"
-                  onClick={() => void deleteSession(session)}
-                  disabled={deletingTicketId === session.ticketId}
-                  aria-label={`Delete all files in photo ${session.queueNumber}`}
-                  className="absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-rose-600 text-white shadow-lg hover:bg-rose-700 disabled:opacity-60"
+              </button>
+              <div className="flex min-h-14 flex-wrap items-center gap-3 px-3 py-2">
+                <span className="mr-auto text-sm font-semibold text-neutral-600">Photo #{session.queueNumber}</span>
+                <Link
+                  href={session.galleryUrl}
+                  className="inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-4"
                 >
-                  <Trash2 size={18} />
-                </button>
-              ) : null}
+                  View gallery
+                </Link>
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => void deleteSession(session)}
+                    disabled={deletingTicketId === session.ticketId}
+                    aria-label={`Delete all files in photo ${session.queueNumber}`}
+                    className="grid h-11 w-11 place-items-center rounded-md bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                ) : null}
+              </div>
             </article>
           ))}
         </section>
@@ -318,6 +333,14 @@ export function EventGalleryClient({ eventId }: { eventId: string }) {
           ) : null}
         </div>
       </div>
+      {selectedPhoto?.preview ? (
+        <EventPhotoViewer
+          photo={selectedPhoto.preview}
+          queueNumber={selectedPhoto.queueNumber}
+          galleryUrl={selectedPhoto.galleryUrl}
+          onClose={() => setSelectedPhoto(null)}
+        />
+      ) : null}
     </main>
   );
 }
